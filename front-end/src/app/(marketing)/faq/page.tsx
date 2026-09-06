@@ -71,8 +71,8 @@ export default function FaqPage() {
           <Button href={SITE.repo} variant="secondary" size="sm">
             Read the source
           </Button>
-          <Button href="/contact" variant="ghost" size="sm">
-            Get in touch
+          <Button href={`${SITE.repo}/issues`} variant="ghost" size="sm">
+            Open an issue
           </Button>
         </div>
       </div>

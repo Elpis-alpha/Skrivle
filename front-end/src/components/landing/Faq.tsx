@@ -5,7 +5,7 @@
 import { Reveal } from "@/components/motion/Reveal";
 import { Button } from "@/components/ui/Button";
 import { Disclosure } from "@/components/ui/Disclosure";
-import { FAQS } from "@/lib/site";
+import { FAQS, SITE } from "@/lib/site";
 
 export function Faq() {
   return (
@@ -25,8 +25,8 @@ export function Faq() {
 
         <p className="mt-6 flex flex-wrap items-center gap-3 text-base text-ink-muted">
           Something else on your mind?
-          <Button href="/contact" variant="ghost" size="sm">
-            Get in touch
+          <Button href={`${SITE.repo}/issues`} variant="ghost" size="sm">
+            Open an issue
           </Button>
         </p>
       </div>

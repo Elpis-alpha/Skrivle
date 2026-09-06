@@ -32,8 +32,7 @@ export const FOOTER_COLUMNS = [
   {
     heading: "Project",
     links: [
-      { href: "/about", label: "About" },
-      { href: "/contact", label: "Contact" },
+      { href: `${SITE.repo}/issues`, label: "Open an issue", external: true },
       { href: SITE.repo, label: "Source code", external: true },
     ],
   },

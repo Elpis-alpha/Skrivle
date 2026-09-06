@@ -29,7 +29,9 @@ export function DevBand() {
           </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button href="/about" variant="secondary" size="sm">
+            {/* The site no longer has its own /about page; this goes straight
+                to the author's. */}
+            <Button href={AUTHOR.about} variant="secondary" size="sm">
               More about me
             </Button>
             {AUTHOR.socials.map((social) => (

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { PageHeader, Prose } from "@/components/site/PageHeader";
 import { SITE } from "@/lib/site";
 
@@ -81,8 +80,8 @@ export default function PrivacyPage() {
         <h2>Questions</h2>
         <p>
           The code is public, so the answer to most questions is readable at{" "}
-          <a href={SITE.repo}>the repository</a>. For anything else, the contact
-          details are on the <Link href="/contact">contact page</Link>.
+          <a href={SITE.repo}>the repository</a>. For anything else,{" "}
+          <a href={`${SITE.repo}/issues`}>open an issue</a>.
         </p>
       </Prose>
     </>
