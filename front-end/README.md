@@ -24,6 +24,22 @@ Playwright needs its browser binary once per machine:
 npx playwright install chromium
 ```
 
+## Deployment (Cloudflare Workers)
+
+Deployed to Cloudflare Workers as `skrivle-web` via
+[`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare). Config lives in
+[`wrangler.jsonc`](wrangler.jsonc) and [`open-next.config.ts`](open-next.config.ts).
+
+```bash
+npm run preview     # build with OpenNext + run the Worker locally in workerd
+npm run deploy      # build + deploy to Cloudflare (needs `wrangler login`)
+npm run cf-typegen  # regenerate cloudflare-env.d.ts after editing wrangler.jsonc
+```
+
+`.dev.vars` holds local-only vars for `next dev` / `preview` (gitignored). The
+generated `cloudflare-env.d.ts` is gitignored — run `npm run cf-typegen` after a
+fresh clone or a `wrangler.jsonc` change.
+
 ## Design system
 
 The [`docs/STYLE_GUIDE.md`](../docs/STYLE_GUIDE.md) tokens are the single source

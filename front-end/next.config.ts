@@ -1,4 +1,8 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+
+// Gives `next dev` access to the Cloudflare bindings declared in wrangler.jsonc.
+initOpenNextCloudflareForDev();
 
 const nextConfig: NextConfig = {
   images: {

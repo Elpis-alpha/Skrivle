@@ -34,3 +34,7 @@ Thumbs.db
 
 # Claude Code — local per-user overrides (shared config is .claude/settings.json)
 .claude/settings.local.json
+
+/.open-next/
+/.wrangler/
+cloudflare-env.d.ts
