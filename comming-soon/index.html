@@ -13,7 +13,9 @@
   <meta name="theme-color" content="#FAF9F7" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1A1620" media="(prefers-color-scheme: dark)">
 
-  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%2332174D'/%3E%3Ctext%20x='16'%20y='23'%20font-family='Poppins,Segoe%20UI,Arial,sans-serif'%20font-size='21'%20font-weight='700'%20fill='%23fff'%20text-anchor='middle'%3Es%3C/text%3E%3C/svg%3E">
+  <!-- pen-loop mark; ink flips with the OS theme so it stays visible on light/dark tab bars -->
+  <link rel="icon" media="(prefers-color-scheme: dark)" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cg%20fill='none'%20stroke-linecap='round'%20stroke-linejoin='round'%20stroke-width='3.25'%20transform='translate%281%202.5%29'%3E%3Cpath%20stroke='%23F2EEF6'%20d='M16%206c6-.5%2010%204%209.5%2010S20%2026%2014%2025.5%204.5%2019.5%205.5%2013.5%2010%205.5%2014.5%206'/%3E%3Cpath%20stroke='%23A57FC7'%20d='M14.5%206C12%205.5%209.7%203.6%208.2%201'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cg%20fill='none'%20stroke-linecap='round'%20stroke-linejoin='round'%20stroke-width='3.25'%20transform='translate%281%202.5%29'%3E%3Cpath%20stroke='%23241631'%20d='M16%206c6-.5%2010%204%209.5%2010S20%2026%2014%2025.5%204.5%2019.5%205.5%2013.5%2010%205.5%2014.5%206'/%3E%3Cpath%20stroke='%2332174D'%20d='M14.5%206C12%205.5%209.7%203.6%208.2%201'/%3E%3C/g%3E%3C/svg%3E">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -141,9 +143,27 @@
       margin-inline: auto;
     }
 
-    .wordmark {
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 11px;
       margin: 0 0 var(--space-12);
-      font-size: 20px;
+    }
+
+    .logo-mark {
+      flex: none;
+      width: 30px;
+      height: 30px;
+      color: var(--ink); /* the loop stroke inherits this via currentColor */
+    }
+
+    .logo-mark .tail {
+      /* stroke: var(--accent); */
+      stroke: currentColor; /* the tail stroke inherits this via currentColor */
+    }
+
+    .wordmark {
+      font-size: 22px;
       font-weight: 700;
       letter-spacing: -0.02em;
       color: var(--ink);
@@ -207,7 +227,15 @@
 </head>
 <body>
   <main>
-    <p class="wordmark">skrivle</p>
+    <p class="logo">
+      <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.75" transform="translate(1 2.5)">
+          <path stroke="currentColor" d="M16 6c6-.5 10 4 9.5 10S20 26 14 25.5 4.5 19.5 5.5 13.5 10 5.5 14.5 6"/>
+          <path class="tail" d="M14.5 6C12 5.5 9.7 3.6 8.2 1"/>
+        </g>
+      </svg>
+      <span class="wordmark">skrivle</span>
+    </p>
     <h1>A whiteboard you can share in one link.</h1>
     <p class="tagline">Coming soon. A real-time collaborative canvas — no account, just a URL.</p>
     <a class="cta" href="https://github.com/Elpis-alpha/Skrivle">View the repo</a>
