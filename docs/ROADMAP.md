@@ -8,7 +8,8 @@
 - [ ] Decide snapshot retention + scale-out stance
 - [ ] Scaffold `back-end` (Express + Socket.IO + Yjs, Postgres connection)
 - [ ] Scaffold `front-end` (Next.js + Tailwind)
-- [ ] Docker Compose stack (front-end, back-end, postgres, nginx)
+- [ ] Back-end Docker Compose stack (back-end, postgres, nginx)
+- [x] `coming-soon` deployed (Cloudflare, `skrivle.elpis.cc`)
 
 ## Phase 1 — v1 demo-ready
 
@@ -25,7 +26,8 @@ Goal: the four success criteria in [PROJECT_BRIEF.md](../PROJECT_BRIEF.md) are m
 - [ ] Claim guest board on sign-in; "My Boards" list
 - [ ] Roles: owner / editor
 - [ ] Expiry sweep job
-- [ ] `coming-soon` page + deployment + public demo URL
+- [x] `coming-soon` page + deployment
+- [ ] Public demo URL (front-end live)
 
 ## Phase 2 — Native app
 

@@ -1,9 +1,9 @@
 # coming-soon
 
-Static holding page served at the domain root until `front-end/` is
-demo-ready (see [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) —
-Deployment). Nginx serves `index.html` at `/`; once the web client ships,
-the root proxies to `front-end/` instead.
+Static holding page, hosted on Cloudflare (see
+[../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — Deployment). Lives at
+`skrivle.elpis.cc` until `front-end/` is demo-ready, then moves to
+`soon.skrivle.elpis.cc`.
 
 Intentionally **build-free**: a single `index.html` with an inline `<style>`
 block, per [../docs/STYLE_GUIDE.md](../docs/STYLE_GUIDE.md) §11.4. No

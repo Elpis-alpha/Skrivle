@@ -49,7 +49,8 @@ Portfolio piece built to:
 - **Database**: PostgreSQL (users, board metadata, permissions) — Yjs snapshots
   stored as blobs, not modeled relationally
 - **Auth**: OAuth (GitHub + Google)
-- **Deployment**: Docker Compose, Nginx
+- **Deployment**: Cloudflare (coming-soon + front-end); Docker Compose + Nginx
+  (back-end API)
 
 ## Success criteria for "done" (v1 demo-ready)
 

@@ -12,8 +12,10 @@ Browser (Next.js)                 Server (Express)                PostgreSQL
                                     Snapshot writer                 board_snapshots
 ```
 
-Nginx terminates TLS and reverse-proxies `/` to the front-end and `/socket.io` +
-`/api` to the back-end. Everything runs under one Docker Compose stack.
+Hosting is split by tier. The `coming-soon/` static page and the `front-end/`
+(Next.js) are served by **Cloudflare**. Only the `back-end/` runs as a Docker
+Compose stack, with **Nginx** terminating TLS and reverse-proxying `/socket.io`
++ `/api` to the Express server. See [Deployment](#deployment) for domains.
 
 ## Real-time sync model
 
@@ -83,9 +85,15 @@ board_snapshots
 
 ## Deployment
 
-- Docker Compose: `front-end`, `back-end`, `postgres`, `nginx`.
-- The `coming-soon/` static page is served at the root until the front-end is
-  demo-ready.
+Hosted under `elpis.cc`, split by tier:
+
+| Domain | Serves | Where |
+| --- | --- | --- |
+| `skrivle.elpis.cc` | `coming-soon/` now → `front-end/` once demo-ready | Cloudflare |
+| `soon.skrivle.elpis.cc` | `coming-soon/` (after the front-end takes the apex) | Cloudflare |
+| `api.skrivle.elpis.cc` | `back-end/` (`/socket.io` + `/api`) | Docker Compose + Nginx |
+
+- Back-end Compose stack: `back-end`, `postgres`, `nginx`.
 - Public demo URL is a v1 done-criterion.
 
 ## Open questions

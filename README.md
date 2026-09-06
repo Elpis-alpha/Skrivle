@@ -18,7 +18,7 @@ across them.
 | [`front-end/`](front-end/) | React / Next.js + Tailwind web client |
 | [`back-end/`](back-end/) | Node.js / Express + Socket.IO + Yjs server |
 | [`app-native/`](app-native/) | React Native app — phase 2 viewer / light editor |
-| [`coming-soon/`](coming-soon/) | Static holding page served at the domain root until launch |
+| [`coming-soon/`](coming-soon/) | Static holding page (Cloudflare) — live at `skrivle.elpis.cc` until launch |
 | [`docs/`](docs/) | Architecture, style guide, roadmap |
 
 ## Documentation
@@ -32,7 +32,7 @@ across them.
 ## Tech stack
 
 React/Next.js · Tailwind · Socket.IO · Yjs (CRDT) · Node.js/Express · PostgreSQL ·
-OAuth (GitHub + Google) · Docker Compose · Nginx
+OAuth (GitHub + Google) · Cloudflare (web) · Docker Compose + Nginx (API)
 
 ## License
 
