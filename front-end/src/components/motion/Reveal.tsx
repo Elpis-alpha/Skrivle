@@ -21,14 +21,8 @@
 //    already seen.
 
 import { motion, useReducedMotion } from "motion/react";
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useMounted } from "@/components/motion/useMounted";
 
 const DURATION = 0.32; // --dur-reveal
 const EASE = [0.3, 0, 0, 1] as const; // --ease-entrance
@@ -39,19 +33,10 @@ const VARIANTS = {
   shown: { opacity: 1, y: 0 },
 } as const;
 
-const noop = () => () => {};
-const onClient = () => true;
-const onServer = () => false;
-
 // Runs before paint, so content already in view is marked shown in the same
 // frame the hidden state appears — otherwise the hero blinks once at mount.
 // useLayoutEffect warns during SSR, where there is nothing to lay out anyway.
 const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffect;
-
-/** False through SSR and the hydrating render, true from mount onward. */
-function useMounted() {
-  return useSyncExternalStore(noop, onClient, onServer);
-}
 
 /** True once the element has been seen — or was already behind the reader. */
 function useRevealed(enabled: boolean) {

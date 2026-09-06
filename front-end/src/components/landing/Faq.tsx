@@ -1,9 +1,10 @@
 // Native <details> so it works on the keyboard, with a screen reader, and
-// before the JavaScript arrives. Styled per §10.18.
+// before the JavaScript arrives. Styled per §10.18; the open/close animation
+// lives in Disclosure.
 
-import { Plus } from "lucide-react";
 import { Reveal } from "@/components/motion/Reveal";
 import { Button } from "@/components/ui/Button";
+import { Disclosure } from "@/components/ui/Disclosure";
 import { FAQS } from "@/lib/site";
 
 export function Faq() {
@@ -16,25 +17,9 @@ export function Faq() {
 
         <div className="mt-8 max-w-2xl border-t border-border">
           {FAQS.map((entry) => (
-            <details key={entry.q} className="group border-b border-border">
-              <summary
-                className={
-                  "flex cursor-pointer list-none items-center gap-4 py-4 text-md " +
-                  "font-medium text-ink transition-colors duration-(--dur-fast) " +
-                  "ease-standard hover:text-accent-400 focus-visible:focus-ring " +
-                  "[&::-webkit-details-marker]:hidden"
-                }
-              >
-                {entry.q}
-                <Plus
-                  size={18}
-                  strokeWidth={1.5}
-                  aria-hidden="true"
-                  className="ml-auto shrink-0 text-ink-muted transition-transform duration-(--dur-base) ease-standard group-open:rotate-45"
-                />
-              </summary>
-              <p className="max-w-measure pb-5 text-base text-ink-secondary">{entry.a}</p>
-            </details>
+            <Disclosure key={entry.q} summary={entry.q} className="border-b border-border">
+              {entry.a}
+            </Disclosure>
           ))}
         </div>
 
