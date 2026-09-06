@@ -1,0 +1,303 @@
+@import "tailwindcss";
+
+/* Dark mode is an explicit [data-theme] attribute set by the boot script in
+   layout.tsx — never prefers-color-scheme directly. See STYLE_GUIDE.md §11.1. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Design tokens — STYLE_GUIDE.md §11.1, the single source of truth.
+   Kept verbatim except: --font-sans, --ease-*, --radius-*, and the type scale
+   are hoisted into the @theme blocks below (they are not theme-swapped and/or
+   collide with a Tailwind v4 namespace). Everything here IS theme-swapped.
+   ──────────────────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* paper */
+  --canvas-bg: #faf9f7;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --wg-50: #f5f3f0;
+  --wg-100: #edeae4;
+  --wg-200: #dedad2;
+  --wg-300: #c6c0b4;
+  --wg-400: #a8a093;
+  --wg-500: #857d6e;
+  --wg-600: #5f584c;
+  --border: var(--wg-200);
+  --border-strong: var(--wg-300);
+
+  /* ink */
+  --ink: #241631;
+  --ink-secondary: #4a3d57;
+  --ink-muted: #6f6579;
+
+  /* amethyst scale */
+  --accent-50: #f4eef9;
+  --accent-100: #e7dbf1;
+  --accent-200: #cbb3e0;
+  --accent-300: #a57fc7;
+  --accent-400: #7a4da6;
+  --accent-500: #5c2e86;
+  --accent-600: #432066;
+  --accent-700: #32174d;
+  --accent-800: #25113a;
+
+  /* accent semantic */
+  --accent: var(--accent-700);
+  --accent-hover: var(--accent-600);
+  --accent-active: var(--accent-800);
+  --accent-subtle: var(--accent-50);
+  --accent-on: #ffffff;
+
+  /* presence (your own) */
+  --you: var(--accent-500);
+
+  /* semantic */
+  --success: #2e7d5b;
+  --success-subtle: #e4f1ea;
+  --warning: #b26b00;
+  --warning-strong: #806200;
+  --warning-subtle: #f6e8d4;
+  --danger: #b23a3a;
+  --danger-subtle: #f5e1e1;
+
+  /* canvas grid */
+  --grid-dot: var(--wg-100);
+
+  /* elevation */
+  --elev-1: 0 1px 2px rgba(36, 22, 49, 0.06), 0 1px 1px rgba(36, 22, 49, 0.04);
+  --elev-2: 0 4px 12px rgba(36, 22, 49, 0.1);
+  --elev-3: 0 12px 32px rgba(36, 22, 49, 0.16);
+  --raised-inset: none;
+
+  /* space */
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* motion durations (Tailwind has no themeable namespace for these — use raw,
+     e.g. duration-(--dur-base)) */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+  --dur-settle: 400ms;
+
+  /* focus */
+  --focus-ring: 0 0 0 2px var(--canvas-bg), 0 0 0 4px var(--accent);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --canvas-bg: #1a1620;
+  --surface: #241f2c;
+  --surface-raised: #2e2838;
+  --wg-50: #262130;
+  --wg-100: #302a3a;
+  --wg-200: #3a3343;
+  --wg-300: #48404f;
+  --wg-400: #6b6276;
+  --wg-500: #8e8399;
+  --wg-600: #a99fb4;
+  --border: var(--wg-200);
+  --border-strong: var(--wg-300);
+
+  --ink: #f2eef6;
+  --ink-secondary: #c4bbd0;
+  --ink-muted: #968ba3;
+
+  --accent: var(--accent-300);
+  --accent-hover: var(--accent-200);
+  --accent-active: var(--accent-100);
+  --accent-subtle: rgba(165, 127, 199, 0.16);
+  --accent-on: #1a1620;
+  --you: var(--accent-300);
+
+  --success: #4fb086;
+  --success-subtle: #1e3a30;
+  --warning: #d99a3c;
+  --warning-strong: #e7b36a;
+  --warning-subtle: #3a2e1c;
+  --danger: #d96b6b;
+  --danger-subtle: #3a2323;
+
+  --grid-dot: #2a2434;
+
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --elev-2: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --elev-3: 0 14px 36px rgba(0, 0, 0, 0.5);
+  --raised-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  --focus-ring: 0 0 0 2px var(--canvas-bg), 0 0 0 4px var(--accent-300);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Static theme values → Tailwind namespaces (not theme-swapped).
+   The v4 translation of STYLE_GUIDE.md §11.3.
+   ──────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Poppins comes from next/font (layout.tsx) via --font-poppins, then the
+     §11.1 fallback stack. */
+  --font-sans:
+    var(--font-poppins), "Poppins", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* radius — differentiated by what the object is (§5) */
+  --radius-none: 0;
+  --radius-note: 2px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* type scale (§3.1) — app UI base 14px, ratio ~1.2 */
+  --text-2xs: 11px;
+  --text-2xs--line-height: 16px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 20px;
+  --text-base: 14px;
+  --text-base--line-height: 22px;
+  --text-md: 16px;
+  --text-md--line-height: 24px;
+  --text-lg: 20px;
+  --text-lg--line-height: 28px;
+  --text-lg--letter-spacing: -0.015em;
+  --text-lg--font-weight: 600;
+  --text-xl: 25px;
+  --text-xl--line-height: 32px;
+  --text-xl--letter-spacing: -0.015em;
+  --text-xl--font-weight: 600;
+  --text-2xl: 31px;
+  --text-2xl--line-height: 40px;
+  --text-2xl--letter-spacing: -0.015em;
+  --text-2xl--font-weight: 600;
+  --text-3xl: 39px;
+  --text-3xl--line-height: 44px;
+  --text-3xl--letter-spacing: -0.02em;
+  --text-3xl--font-weight: 600;
+  --text-4xl: 49px;
+  --text-4xl--line-height: 52px;
+  --text-4xl--letter-spacing: -0.02em;
+  --text-4xl--font-weight: 600;
+
+  /* body measure cap (§3.1) */
+  --container-measure: 68ch;
+
+  /* motion easing (§7) */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-entrance: cubic-bezier(0.3, 0, 0, 1);
+}
+
+/* Theme-swapped values → Tailwind namespaces. `inline` so utilities resolve
+   straight to the runtime var (which flips under [data-theme="dark"]) rather
+   than freezing a copy. */
+@theme inline {
+  --color-canvas: var(--canvas-bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-grid: var(--grid-dot);
+
+  --color-wg-50: var(--wg-50);
+  --color-wg-100: var(--wg-100);
+  --color-wg-200: var(--wg-200);
+  --color-wg-300: var(--wg-300);
+  --color-wg-400: var(--wg-400);
+  --color-wg-500: var(--wg-500);
+  --color-wg-600: var(--wg-600);
+
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-muted: var(--ink-muted);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-on: var(--accent-on);
+  --color-accent-50: var(--accent-50);
+  --color-accent-100: var(--accent-100);
+  --color-accent-200: var(--accent-200);
+  --color-accent-300: var(--accent-300);
+  --color-accent-400: var(--accent-400);
+  --color-accent-500: var(--accent-500);
+  --color-accent-600: var(--accent-600);
+  --color-accent-700: var(--accent-700);
+  --color-accent-800: var(--accent-800);
+
+  --color-you: var(--you);
+
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-warning: var(--warning);
+  --color-warning-strong: var(--warning-strong);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
+
+  --shadow-elev-1: var(--elev-1);
+  --shadow-elev-2: var(--elev-2);
+  --shadow-elev-3: var(--elev-3);
+}
+
+@layer base {
+  /* Tailwind v4 defaults `border-color` to currentColor; the style guide
+     assumes a bare `border` utility means the --border hairline (§6). */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  body {
+    background: var(--canvas-bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* §9 — double focus ring that reads on canvas, on white, and on an accent fill.
+   Use as `focus-visible:focus-ring`. */
+@utility focus-ring {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* §3.2 — the wordmark is the only place Poppins 700 is used, and it is always
+   --ink, never the accent. Unlayered so it wins over the weight carried by the
+   larger type-scale utilities. */
+.wordmark {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+/* §1 quality floor — respect reduced motion. Components layer their own nuance
+   (§7) on top of this conservative baseline. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
