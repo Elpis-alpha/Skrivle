@@ -186,9 +186,10 @@ App UI base is **14px**, ratio ~1.200. Sizes are `px / line-height px`.
 | `text-2xl` | 31 / 40 | landing subhead |
 | `text-3xl` | 39 / 44 | landing hero line |
 | `text-4xl` | 49 / 52 | `coming-soon` headline |
+| `text-5xl` | 61 / 64 | marketing hero headline only (§13) — never in the product |
 
 - Headings `lg`–`2xl`: letter-spacing `-0.015em`, weight 600.
-- Display `3xl`–`4xl`: letter-spacing `-0.02em`, weight 600.
+- Display `3xl`–`5xl`: letter-spacing `-0.02em`, weight 600.
 - Body: letter-spacing `0`, weight 400, measure capped at **68ch**.
 - Numerals in countdowns, counts, and coordinates: `font-variant-numeric:
   tabular-nums`.
@@ -213,27 +214,40 @@ on all sides.
 - Default gap between sibling controls: 8px; between form fields: 16px; between
   page sections: 48–64px.
 
-### 4.1 Landing (`/`)
+### 4.1 Landing (`/`) — hero
 
-Left-aligned. Single column, text block capped ~560px. The hero **is the
-product**: a large `New board` button and a one-line value statement, with a
-faint live board preview behind or beside it — not a big-number stat treatment.
+The landing page is a **marketing surface**; the rest of its anatomy, and the
+rules it is allowed to bend, live in [§13](#13-marketing-surfaces). This section
+covers only the hero, which stays governed by §1–§12.
+
+Two columns at `lg`, stacked below. The hero **is the product**: a headline, a
+large `New board` button, and a live board preview beside it — not a big-number
+stat treatment. The left column is left-aligned and capped at 560px.
 
 ```
-┌───────────────────────────────────────────────┐
-│  skrivle                          Sign in     │  ← 64px bar, wordmark left
-│                                               │
-│                                               │
-│   A whiteboard you can share in one link.     │  ← text-3xl, --ink
-│   No account needed.                          │  ← text-md, --ink-secondary
-│                                               │
-│   ┌──────────────┐                            │
-│   │  New board   │   or open a board by link  │  ← primary btn + --ink-muted
-│   └──────────────┘                            │
-│                                               │
-│        (faint dot-grid + a few shapes)        │  ← --wg-100 dots, decorative
-└───────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│  ◠ skrivle    Features  How it works  Open source  FAQ  │  ← 64px bar
+│                              ☾   Sign in  [New board]   │
+│                                                         │
+│  A whiteboard you can        ┌───────────────────────┐  │  ← text-5xl, --ink
+│  share in one link.          │ · · · · · · · · · · · │  │
+│                              │ ·┌──────┐· · ·↖ Maya· │  │  ← live mock:
+│  No account. No download.    │ · │ note │ · · · · · ·│  │    notes, a stroke
+│  Open the link and draw.     │ ·└──────┘· ·╭─╮ · · · │  │    drawing itself,
+│                              │ · · · ·↖ Ben ╰─╯· · · │  │    2 cursors
+│  [ New board ]               │ · · · · · · · · · · · │  │
+│                              └───────────────────────┘  │
+│  ┌────────────────────────┐                             │
+│  │ …/board/ │ id    │Join │                             │  ← §10.4 pattern
+│  └────────────────────────┘                             │
+│                                                         │
+│  ✓ Free   ✓ No sign-up   ✓ Any browser                  │  ← three facts,
+└─────────────────────────────────────────────────────────┘     not a · string
 ```
+
+The dot grid sits behind the whole hero at `--grid-dot`, radially masked so it
+fades out before the edges. The board preview is the page's one ambient loop
+(§13.2) — it is a mock, never a real Yjs doc.
 
 ### 4.2 Board (`/board/:id`)
 
@@ -417,8 +431,8 @@ dialog says so once, quietly.
 - Groups separated by a 1px `--wg-200` divider: [select, hand] · [note, text] ·
   [rectangle, circle, line/arrow, pen] · [color swatch] · [more ⋯].
 - Active tool: `--accent-subtle` bg, `--accent-400` icon, `--radius-sm`.
-- Hover shows the tool name + shortcut key in a tooltip (`V`, `N`, `T`, `R`, `O`,
-  `L`, `P`).
+- Hover shows the tool name + shortcut key in a tooltip (`V` select, `H` hand,
+  `N` note, `T` text, `R` rectangle, `O` circle, `L` line/arrow, `P` pen).
 - Collapses to an icon that opens the full pill below 480px width.
 
 ### 10.6 Color / stroke picker
@@ -624,12 +638,14 @@ Thin (8px), transparent track, `--wg-300` thumb at `--radius-pill`, thumb →
   --space-1: 4px;   --space-2: 8px;   --space-3: 12px;  --space-4: 16px;
   --space-5: 20px;  --space-6: 24px;  --space-8: 32px;  --space-10: 40px;
   --space-12: 48px; --space-16: 64px; --space-20: 80px; --space-24: 96px;
+  --space-32: 128px; /* marketing section rhythm at lg (§13.1) */
   --space-0-5: 2px;
 
   /* motion */
   --dur-fast: 120ms;
   --dur-base: 180ms;
   --dur-slow: 280ms;
+  --dur-reveal: 320ms; /* marketing scroll reveal (§13.2) */
   --dur-settle: 400ms;
   --ease-standard: cubic-bezier(.2, 0, 0, 1);
   --ease-entrance: cubic-bezier(.3, 0, 0, 1);
@@ -725,6 +741,12 @@ export const NOTE_COLORS = [
 ```
 
 ### 11.3 Tailwind config
+
+> **This block is the Tailwind v3 reference.** `front-end/` runs Tailwind v4,
+> which has no `tailwind.config.js` — the same mapping lives in `@theme` blocks
+> in [`front-end/src/app/globals.css`](../front-end/src/app/globals.css), and
+> that file is authoritative for the front-end. Keep the two in step; where they
+> disagree, globals.css is right and this block needs updating.
 
 ```js
 // tailwind.config.js — theme.extend. Values point at the CSS vars above so a
@@ -838,3 +860,89 @@ module.exports = {
 - [ ] `prefers-reduced-motion` and dark theme both checked.
 - [ ] Copy is sentence case, active voice, names the outcome; no `→` on buttons,
       no all-caps labels, no decorative eyebrows.
+
+---
+
+## 13. Marketing surfaces
+
+Everything above describes the **product**: the board, My Boards, the dialogs
+laid over them. The pages that sell the product have a different job, and a few
+of the product rules would make them worse. This section names those exceptions
+and nothing more — anything §13 does not explicitly relax still applies.
+
+**Scope.** `/`, `/about`, `/contact`, `/privacy`, `/terms`, `/faq`, and the
+`coming-soon` page. **Not** `/board/*`, `/boards`, or `/signin` — those are
+product surfaces and answer to §1–§12 alone.
+
+### 13.1 What marketing may do that the product may not
+
+| | Product (§1–§12) | Marketing (§13) |
+| --- | --- | --- |
+| Content width | panel/dialog widths | 1120px centred; prose still ≤ 68ch |
+| Section rhythm | 48–64px | 96px, 128px at `lg` (`--space-24` / `--space-32`) |
+| Display type | `text-4xl` ceiling | `text-5xl` for one headline per page |
+| Motion | one moment, per §7 | §13.2 |
+| Illustration | none | §13.3 |
+| Amethyst | primary action + your presence | §13.4 |
+
+### 13.2 Motion budget
+
+§1's "one motion moment" is a product rule. A marketing page gets two things:
+
+1. **Scroll reveal** — opacity 0→1 with an 16px rise, `--dur-reveal` (320ms)
+   `--ease-entrance`, fired **once**, 60ms stagger between siblings. Reserve it
+   for whole bands arriving, not for every card, chip, and list item; a page
+   where everything fades up reads as a template.
+2. **One ambient loop per page.** On `/` that budget is the hero board preview.
+   Having spent it there, nothing else on `/` may animate on its own.
+
+Both are gated on `prefers-reduced-motion: reduce`: reveals become instant, the
+loop holds its finished frame. Hover, press, and focus transitions follow §7
+unchanged.
+
+### 13.3 Illustration
+
+Permitted on marketing surfaces only. Any illustration is **token-mapped before
+it ships** — inlined as SVG so `--ink`, `--surface`, and the warm grays reach it
+and it re-inks itself in dark mode. Stock palettes never ship as drawn.
+
+The map used for the [unDraw](https://undraw.co) set:
+
+| Source | → |
+| --- | --- |
+| `#6c63ff` (unDraw indigo) | `var(--accent-400)` |
+| `#fd6584` / `#ff6584` | `var(--accent-300)` |
+| `#090814`, `#2f2e41`, `#010102` | `var(--ink)` |
+| `#3f3d56` | `var(--ink-secondary)` |
+| `#fff`, `#ffffff`, `#f2f2f2` | `var(--surface)` |
+| `#e6e6e6`, `#e4e4e4`, `#d6d6e3` | `var(--wg-100)` |
+| `#ccc`, `#cacaca` | `var(--wg-300)` |
+| skin tones (`#a0616a`, `#ffb6b6`, `#ed9da0`, `#ffb8b8`, `#ffb9b9`) | **kept literal** — people are not tokens |
+
+Illustrations are decorative: `aria-hidden="true"`, `focusable="false"`, and the
+adjacent copy carries the meaning.
+
+### 13.4 Amethyst on marketing
+
+§1's rule holds for **solid** amethyst: a filled `--accent` block is still the
+primary action and nothing else. Marketing may additionally use `--accent-subtle`
+as a section or chip tint, `--accent-400` inside illustration line art, and
+`--accent-100` as a hairline. Never a full-bleed amethyst band — the moment the
+accent becomes a background, the primary button stops meaning anything.
+
+### 13.5 Honesty
+
+The product has no users yet, and the page says so by omission: no invented
+metrics, no testimonials, no customer logo wall, no "trusted by" anything. Where
+a feature is unbuilt, the page states its status plainly (see the roadmap band
+on `/`) rather than implying it ships today. This is a portfolio piece; a
+fabricated number costs more than it buys.
+
+### 13.6 Copy
+
+§12's voice rules apply in full, plus two marketing-specific ones:
+
+- No eyebrow labels above headings. If a section needs naming, the heading names
+  it.
+- No meta strings joined with middle dots (`Free · No sign-up · Fast`). Give the
+  items real structure — a list, a row of checks, separate lines.

@@ -7,7 +7,8 @@
 - [x] Style guide / design system
 - [ ] Decide snapshot retention + scale-out stance
 - [ ] Scaffold `back-end` (Express + Socket.IO + Yjs, Postgres connection)
-- [ ] Scaffold `front-end` (Next.js + Tailwind)
+- [x] Scaffold `front-end` (Next.js + Tailwind)
+- [x] Landing page + marketing surface (`/`, about, privacy, faq, contact, terms)
 - [ ] Back-end Docker Compose stack (back-end, postgres, nginx)
 - [x] `coming-soon` deployed (Cloudflare, `skrivle.elpis.cc`)
 

@@ -28,11 +28,17 @@ without asking. Each folder currently holds only a `.keep`.
 - All visual work follows [docs/STYLE_GUIDE.md](docs/STYLE_GUIDE.md): Poppins,
   minimal, purple-tinted ink (not black), full amethyst `#32174D` only for the
   primary action and your own presence. Tokens live in `:root` CSS vars + a
-  matching Tailwind config (both in the style guide).
+  matching Tailwind config (both in the style guide). §1–§12 govern the product
+  (`/board`, `/boards`); **§13 governs marketing surfaces** (`/`, about, privacy,
+  faq, contact, terms), which may use illustrations and scroll reveals. The
+  authoritative Tailwind v4 translation is `front-end/src/app/globals.css`, not
+  the v3 block in §11.3.
 - Keep the relational schema shallow; canvas state is a Yjs doc persisted as a
   blob snapshot, never modeled as rows. See ARCHITECTURE.md for the trade-off.
 
 ## Status
 
-Phase 0 (initialization). Docs and structure only, no application code.
-See [docs/ROADMAP.md](docs/ROADMAP.md).
+Phase 0 (initialization). The `front-end` landing page and its static pages are
+built; the canvas, the back-end, and auth are not. `/board/:id` is a placeholder
+route, and board ids are minted client-side until the API exists (see
+`front-end/src/lib/board-id.ts`). See [docs/ROADMAP.md](docs/ROADMAP.md).

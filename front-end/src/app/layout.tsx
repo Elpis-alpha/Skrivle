@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
+import { SITE } from "@/lib/site";
 
 // STYLE_GUIDE.md §3 — one family. 400/500/600 for UI, 700 for the wordmark only.
 const poppins = Poppins({
@@ -11,9 +12,25 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Skrivle",
-  description:
-    "A live collaborative whiteboard you can share in one link. No account, just a URL.",
+  metadataBase: new URL(SITE.url),
+  title: {
+    default: `${SITE.name} — ${SITE.tagline}`,
+    template: `%s — ${SITE.name}`,
+  },
+  description: SITE.description,
+  applicationName: SITE.name,
+  openGraph: {
+    type: "website",
+    siteName: SITE.name,
+    title: `${SITE.name} — ${SITE.tagline}`,
+    description: SITE.description,
+    url: SITE.url,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE.name} — ${SITE.tagline}`,
+    description: SITE.description,
+  },
 };
 
 // STYLE_GUIDE.md §11.1 — theme is always explicit. This blocking script sets

@@ -85,12 +85,14 @@
   --space-16: 64px;
   --space-20: 80px;
   --space-24: 96px;
+  --space-32: 128px;
 
   /* motion durations (Tailwind has no themeable namespace for these — use raw,
      e.g. duration-(--dur-base)) */
   --dur-fast: 120ms;
   --dur-base: 180ms;
   --dur-slow: 280ms;
+  --dur-reveal: 320ms;
   --dur-settle: 400ms;
 
   /* focus */
@@ -192,9 +194,16 @@
   --text-4xl--line-height: 52px;
   --text-4xl--letter-spacing: -0.02em;
   --text-4xl--font-weight: 600;
+  /* marketing hero headline only (§13.1) — never in the product */
+  --text-5xl: 61px;
+  --text-5xl--line-height: 64px;
+  --text-5xl--letter-spacing: -0.02em;
+  --text-5xl--font-weight: 600;
 
   /* body measure cap (§3.1) */
   --container-measure: 68ch;
+  /* marketing content width (§13.1) */
+  --container-marketing: 1120px;
 
   /* motion easing (§7) */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
@@ -277,6 +286,40 @@
 @utility focus-ring {
   outline: none;
   box-shadow: var(--focus-ring);
+}
+
+/* §4.4 — the canvas dot grid, reused on marketing surfaces (§13) as the page's
+   ground. 24px spacing, 1.5px dots, --grid-dot (flips with the theme). */
+@utility dot-grid {
+  background-image: radial-gradient(
+    var(--grid-dot) 0.75px,
+    transparent 0.75px
+  );
+  background-size: 24px 24px;
+  background-position: center;
+}
+
+/* Fades a decorative layer out before it reaches the edges, so the grid never
+   ends in a hard line. Pair with `dot-grid` on an absolutely-positioned layer. */
+@utility grid-fade {
+  -webkit-mask-image: radial-gradient(
+    ellipse 75% 70% at 50% 35%,
+    #000 35%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 75% 70% at 50% 35%,
+    #000 35%,
+    transparent 100%
+  );
+}
+
+/* §13.1 — marketing content width. Prose inside still caps at --container-measure. */
+@utility shell {
+  margin-inline: auto;
+  width: 100%;
+  max-width: var(--container-marketing);
+  padding-inline: var(--space-6);
 }
 
 /* §3.2 — the wordmark is the only place Poppins 700 is used, and it is always
