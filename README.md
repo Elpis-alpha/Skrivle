@@ -18,7 +18,7 @@ across them.
 | [`front-end/`](front-end/) | React / Next.js + Tailwind web client |
 | [`back-end/`](back-end/) | Node.js / Express + Socket.IO + Yjs server |
 | [`app-native/`](app-native/) | React Native app — phase 2 viewer / light editor |
-| [`comming-soon/`](comming-soon/) | Static holding page served at the domain root until launch |
+| [`coming-soon/`](coming-soon/) | Static holding page served at the domain root until launch |
 | [`docs/`](docs/) | Architecture, style guide, roadmap |
 
 ## Documentation

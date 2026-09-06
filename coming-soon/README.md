@@ -1,4 +1,4 @@
-# comming-soon
+# coming-soon
 
 Static holding page served at the domain root until `front-end/` is
 demo-ready (see [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) —

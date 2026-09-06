@@ -1,7 +1,7 @@
 # Skrivle — Style Guide
 
 Status: design system spec. No UI is built yet. This document is the source of
-truth for anything visual in `front-end/` and `comming-soon/`.
+truth for anything visual in `front-end/` and `coming-soon/`.
 
 Brand constraints (fixed): **Poppins** for all type · **minimal** · canvas is
 **white / off-white / warm gray** · accent is **`#32174D`, "Dark Amethyst"**.
@@ -185,7 +185,7 @@ App UI base is **14px**, ratio ~1.200. Sizes are `px / line-height px`.
 | `text-xl` | 25 / 32 | page headings ("My Boards") |
 | `text-2xl` | 31 / 40 | landing subhead |
 | `text-3xl` | 39 / 44 | landing hero line |
-| `text-4xl` | 49 / 52 | `comming-soon` headline |
+| `text-4xl` | 49 / 52 | `coming-soon` headline |
 
 - Headings `lg`–`2xl`: letter-spacing `-0.015em`, weight 600.
 - Display `3xl`–`4xl`: letter-spacing `-0.02em`, weight 600.
@@ -821,7 +821,7 @@ module.exports = {
   weight is used only by the `.wordmark` class. Set `data-theme` on `<html>` from
   the inline script described in §11.1 (`localStorage` choice, else system), and
   persist any explicit choice back to `localStorage`.
-- **`comming-soon/`**: inline §11.1 and the Poppins `@font-face` (or a
+- **`coming-soon/`**: inline §11.1 and the Poppins `@font-face` (or a
   `<link>` to Google Fonts) in a single `<style>` block — no build step. Use
   `--accent`, `--ink`, `--canvas-bg`, `--font-sans` only; the headline is
   `text-4xl`, one primary-styled link, nothing else.

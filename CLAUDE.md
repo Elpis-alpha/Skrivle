@@ -13,7 +13,7 @@ and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before starting work.
 - `front-end/` — Next.js + Tailwind web client
 - `back-end/` — Express + Socket.IO + Yjs server
 - `app-native/` — React Native, phase 2
-- `comming-soon/` — static holding page for the domain root
+- `coming-soon/` — static holding page for the domain root
 - `docs/` — architecture, style guide, roadmap
 
 Monorepo: this is one GitHub repo (`Elpis-alpha/Skrivle`). Each component folder
@@ -29,7 +29,6 @@ without asking. Each folder currently holds only a `.keep`.
   minimal, purple-tinted ink (not black), full amethyst `#32174D` only for the
   primary action and your own presence. Tokens live in `:root` CSS vars + a
   matching Tailwind config (both in the style guide).
-- Spelling `comming-soon` is intentional (matches the folder name).
 - Keep the relational schema shallow; canvas state is a Yjs doc persisted as a
   blob snapshot, never modeled as rows. See ARCHITECTURE.md for the trade-off.
 

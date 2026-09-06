@@ -84,7 +84,7 @@ board_snapshots
 ## Deployment
 
 - Docker Compose: `front-end`, `back-end`, `postgres`, `nginx`.
-- The `comming-soon/` static page is served at the root until the front-end is
+- The `coming-soon/` static page is served at the root until the front-end is
   demo-ready.
 - Public demo URL is a v1 done-criterion.
 

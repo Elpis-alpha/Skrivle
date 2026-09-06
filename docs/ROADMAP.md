@@ -25,7 +25,7 @@ Goal: the four success criteria in [PROJECT_BRIEF.md](../PROJECT_BRIEF.md) are m
 - [ ] Claim guest board on sign-in; "My Boards" list
 - [ ] Roles: owner / editor
 - [ ] Expiry sweep job
-- [ ] `comming-soon` page + deployment + public demo URL
+- [ ] `coming-soon` page + deployment + public demo URL
 
 ## Phase 2 — Native app
 
