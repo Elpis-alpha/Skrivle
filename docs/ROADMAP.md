@@ -5,11 +5,11 @@
 - [x] Repo structure, license, editorconfig
 - [x] Project brief + architecture notes
 - [x] Style guide / design system
-- [ ] Decide snapshot retention + scale-out stance
-- [ ] Scaffold `back-end` (Express + Socket.IO + Yjs, Postgres connection)
+- [ ] Decide snapshot retention + scale-out stance (scaffold assumes keep-latest + single-process — confirm)
+- [x] Scaffold `back-end` (Express + Socket.IO + Yjs, Prisma/Postgres) — pure skeleton, subsystems stubbed
 - [x] Scaffold `front-end` (Next.js + Tailwind)
 - [x] Landing page + marketing surface (`/`, about, privacy, faq, contact, terms)
-- [ ] Back-end Docker Compose stack (back-end, postgres, nginx)
+- [x] Back-end Docker stack (back-end container only; Postgres external, nginx still TODO)
 - [x] `coming-soon` deployed (Cloudflare, `soon.skrivle.elpis.cc`)
 - [x] `front-end` deployed (Cloudflare Workers / OpenNext, `skrivle.elpis.cc`)
 

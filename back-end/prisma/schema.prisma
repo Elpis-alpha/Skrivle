@@ -1,0 +1,89 @@
+// Skrivle relational schema — docs/ARCHITECTURE.md#data-model.
+// Kept deliberately shallow: canvas state is a Yjs CRDT persisted as a binary
+// snapshot blob (BoardSnapshot.docState), never modelled as rows.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuthProvider {
+  github
+  google
+}
+
+enum CollaboratorRole {
+  owner
+  editor
+}
+
+/// A signed-in user. OAuth only — no password, no email/password login.
+model User {
+  id        String       @id @default(cuid())
+  /// From the OAuth provider when it exposes one; often null (GitHub/Google may withhold it).
+  email     String?      @unique
+  name      String
+  avatarUrl String?
+  provider  AuthProvider
+  createdAt DateTime     @default(now())
+
+  ownedBoards    Board[]             @relation("BoardOwner")
+  collaborations BoardCollaborator[]
+
+  @@map("users")
+}
+
+/// Board metadata. The canvas itself lives in BoardSnapshot, not here.
+model Board {
+  /// The user-facing id: a 5-char generated code or a custom slug. Immutable.
+  id               String    @id
+  ownerId          String?
+  /// Null owner = an anonymous guest board.
+  owner            User?     @relation("BoardOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  title            String    @default("Untitled board")
+  isEphemeral      Boolean   @default(true)
+  /// Guest boards expire (created_at + 24h); the creator can extend by +48h.
+  expiresAt        DateTime?
+  /// Hashed creator token — lets whoever made a guest board extend it without signing in.
+  creatorTokenHash String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  collaborators BoardCollaborator[]
+  snapshots     BoardSnapshot[]
+
+  @@index([ownerId])
+  @@index([expiresAt])
+  @@map("boards")
+}
+
+/// Join table: who can edit which board, and in what role.
+model BoardCollaborator {
+  boardId      String
+  board        Board            @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         CollaboratorRole @default(editor)
+  lastActiveAt DateTime         @default(now())
+
+  @@id([boardId, userId])
+  @@map("board_collaborators")
+}
+
+/// A serialized Yjs document. Written periodically while dirty and on last
+/// disconnect; the newest row rehydrates the in-memory doc on first join.
+/// Retention (keep-latest vs last-N) is an open question — ARCHITECTURE.md.
+model BoardSnapshot {
+  id        String   @id @default(cuid())
+  boardId   String
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  docState  Bytes
+  createdAt DateTime @default(now())
+
+  @@index([boardId, createdAt])
+  @@map("board_snapshots")
+}

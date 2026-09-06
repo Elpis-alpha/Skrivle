@@ -40,7 +40,10 @@ without asking. Each folder currently holds only a `.keep`.
 
 Phase 0 (initialization). The `front-end` landing page and its static pages are
 built and deployed to Cloudflare Workers at `skrivle.elpis.cc` (OpenNext); the
-`coming-soon` page is live at `soon.skrivle.elpis.cc`. The canvas, the back-end,
-and auth are not built. `/board/:id` is a placeholder route, and board ids are
-minted client-side until the API exists (see `front-end/src/lib/board-id.ts`).
-See [docs/ROADMAP.md](docs/ROADMAP.md).
+`coming-soon` page is live at `soon.skrivle.elpis.cc`. The `back-end` is
+scaffolded (Express + Socket.IO + Yjs + Prisma/Postgres) but is a pure skeleton:
+it compiles, lints, tests, and boots, with every subsystem a `TODO(Phase 1)`
+stub — see `back-end/README.md`. The canvas and auth are not built. `/board/:id`
+is a placeholder route, and board ids are minted client-side until the create
+API exists (see `front-end/src/lib/board-id.ts`, mirrored in
+`back-end/src/boards/board-id.ts`). See [docs/ROADMAP.md](docs/ROADMAP.md).

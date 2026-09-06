@@ -1,0 +1,15 @@
+# Only the back-end is containerised. Postgres is external:
+#   dev  — a local install on the host; point DATABASE_URL at host.docker.internal
+#   prod — a managed database; set DATABASE_URL in the environment
+services:
+  back-end:
+    build: .
+    ports:
+      - "${PORT:-4000}:4000"
+    env_file:
+      - .env
+    environment:
+      PORT: 4000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

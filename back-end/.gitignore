@@ -1,0 +1,9 @@
+# node_modules, dist, .env*, and logs are already ignored by the repo-root
+# .gitignore. This file covers only back-end-specific artifacts.
+
+# Prisma client if its generator output is ever redirected out of node_modules
+/src/generated/
+
+# Local Prisma dev databases
+/prisma/*.db
+/prisma/*.db-journal
