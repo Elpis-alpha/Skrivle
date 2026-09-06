@@ -488,14 +488,18 @@ menu.
 
 `--radius-lg`, `--elev-3`, max-width 440px. A read-only URL field + `Copy link`
 button (→ toast `Link copied`). One line: _"Anyone with this link can edit."_ For
-guests, a divider then: _"Sign in to keep this board after it expires."_ +
+guests, a divider then: _"Sign in to keep this board after it expires."_ + an
+email field (`Continue with email`) and, below an `or` divider,
 `Continue with GitHub` / `Continue with Google`.
 
 ### 10.14 Auth dialog / page
 
-Two stacked buttons, secondary style, each with the provider glyph:
-`Continue with GitHub`, `Continue with Google`. One supporting line: _"Your boards
-will be saved to your account."_ No email field, no password — OAuth only.
+Email first: an email field (§10.3) with a primary `Continue with email`, then a
+one-time-code step — a 6-digit input, label _"Enter the code we emailed to that
+address"_, primary `Verify and sign in`, and a quiet `Use a different email` link
+back. Below an `or` divider, two stacked secondary buttons, each with the
+provider glyph: `Continue with GitHub`, `Continue with Google`. One supporting
+line: _"Your boards will be saved to your account."_ No passwords.
 
 ### 10.15 My Boards grid + tile
 

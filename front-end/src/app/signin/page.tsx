@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SignInForm } from "@/components/auth/SignInForm";
 import { PageShell } from "@/components/site/PageShell";
-import { Button } from "@/components/ui/Button";
 
 export const metadata: Metadata = {
   title: "Sign in",
-  description: "Sign in to Skrivle with GitHub or Google to keep your boards.",
+  description:
+    "Sign in to Skrivle with an emailed code, GitHub, or Google to keep your boards.",
 };
 
-// STYLE_GUIDE.md §10.14 — two provider buttons, one supporting line, no email
-// field and no password. Disabled until the back-end exists.
+// STYLE_GUIDE.md §10.14 — email first, then GitHub / Google. No passwords.
+// The form is a client component; nothing is wired to the back-end yet.
 export default function SignInPage() {
   return (
     <PageShell>
@@ -18,18 +19,7 @@ export default function SignInPage() {
         Your boards will be saved to your account.
       </p>
 
-      <div className="mt-6 flex flex-col gap-3">
-        <Button variant="secondary" size="md" disabled>
-          Continue with GitHub
-        </Button>
-        <Button variant="secondary" size="md" disabled>
-          Continue with Google
-        </Button>
-      </div>
-
-      <p className="mt-4 text-xs text-ink-muted">
-        Sign-in isn&apos;t wired up yet — it arrives with the board itself.
-      </p>
+      <SignInForm />
 
       <p className="mt-6 border-t border-border pt-6 text-base text-ink-secondary">
         You don&apos;t need an account to draw.{" "}

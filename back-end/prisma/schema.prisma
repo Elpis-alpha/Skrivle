@@ -12,6 +12,7 @@ datasource db {
 }
 
 enum AuthProvider {
+  email
   github
   google
 }
@@ -21,10 +22,11 @@ enum CollaboratorRole {
   editor
 }
 
-/// A signed-in user. OAuth only — no password, no email/password login.
+/// A signed-in user. No passwords — an emailed one-time code, or OAuth.
 model User {
   id        String       @id @default(cuid())
-  /// From the OAuth provider when it exposes one; often null (GitHub/Google may withhold it).
+  /// Always set for one-time-code sign-in; may be null for OAuth when the
+  /// provider withholds it (GitHub / Google).
   email     String?      @unique
   name      String
   avatarUrl String?
@@ -86,4 +88,19 @@ model BoardSnapshot {
 
   @@index([boardId, createdAt])
   @@map("board_snapshots")
+}
+
+/// Short-lived one-time codes for email sign-in. Not linked to User — the row
+/// may not exist until a code is verified. Codes are stored hashed, never plain.
+model LoginCode {
+  id         String    @id @default(cuid())
+  email      String
+  codeHash   String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  @@index([email, createdAt])
+  @@map("login_codes")
 }

@@ -48,10 +48,11 @@ export default function PrivacyPage() {
 
         <h2>If you sign in</h2>
         <p>
-          Sign-in is OAuth through GitHub or Google. Skrivle receives a provider
-          account id, a display name, and an avatar URL, and stores those to
-          identify you and show you on a board. It never sees or stores a
-          password.
+          Sign-in is a one-time code sent to your email address, or OAuth through
+          GitHub or Google. For a code, Skrivle stores your email address to
+          identify your account and send you the code. For OAuth, it receives a
+          provider account id, a display name, and an avatar URL. Either way it
+          never sees or stores a password.
         </p>
         <p>
           Signing in while on a guest board lets you claim it, which sets you as
@@ -70,7 +71,10 @@ export default function PrivacyPage() {
         <ul>
           <li>No advertising trackers and no third-party analytics.</li>
           <li>No selling or sharing of anything you draw.</li>
-          <li>No email address unless your OAuth provider includes one.</li>
+          <li>
+            No email address beyond the one you sign in with, and none at all if
+            you use GitHub or Google and they do not share one.
+          </li>
         </ul>
         <p>
           Standard server logs — IP address, timestamp, requested path — are kept

@@ -37,4 +37,10 @@ export const config = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
     },
   },
+  email: {
+    /** From-address for one-time-code messages. */
+    from: process.env.EMAIL_FROM ?? "",
+    /** SMTP connection string for the code sender (Phase 1 — provider TBD). */
+    smtpUrl: process.env.SMTP_URL ?? "",
+  },
 } as const;

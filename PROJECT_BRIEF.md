@@ -27,8 +27,8 @@ Portfolio piece built to:
 3. Real-time multiplayer: see other users' live cursors (name + color), see their
    edits appear instantly.
 4. Share via URL — anyone with the link joins the same board as a guest.
-5. "Sign in to save" (GitHub / Google OAuth) — signed-in users' boards persist and
-   appear under "My Boards".
+5. "Sign in to save" (an emailed one-time code, or GitHub / Google) — signed-in
+   users' boards persist and appear under "My Boards".
 6. Anonymous/guest boards are ephemeral — expire after ~24 hours. The creator can
    extend by +48 hours even without signing in.
 
@@ -48,7 +48,7 @@ Portfolio piece built to:
 - **Backend**: Node.js / Express
 - **Database**: PostgreSQL (users, board metadata, permissions) — Yjs snapshots
   stored as blobs, not modeled relationally
-- **Auth**: OAuth (GitHub + Google)
+- **Auth**: email one-time code + OAuth (GitHub + Google)
 - **Deployment**: Cloudflare (coming-soon + front-end); Docker Compose + Nginx
   (back-end API)
 

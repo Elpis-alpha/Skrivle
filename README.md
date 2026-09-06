@@ -32,7 +32,7 @@ across them.
 ## Tech stack
 
 React/Next.js · Tailwind · Socket.IO · Yjs (CRDT) · Node.js/Express · PostgreSQL ·
-OAuth (GitHub + Google) · Cloudflare (web) · Docker Compose + Nginx (API)
+email one-time code + OAuth (GitHub + Google) · Cloudflare (web) · Docker Compose + Nginx (API)
 
 ## License
 

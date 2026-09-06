@@ -65,8 +65,9 @@ to the governing doc section. Still to build (see
   rehydration and snapshot persistence (`doc-manager.ts`, `snapshot-writer.ts`).
 - **REST:** board create / lookup / availability / extend / claim
   (`src/http/routes/boards.ts`) with real Prisma queries and a first migration.
-- **Auth:** OAuth (GitHub + Google), sessions, collaborator roles, guest-board
-  claiming (`src/http/routes/auth.ts`). The OAuth library is not chosen yet.
+- **Auth:** email one-time codes + OAuth (GitHub + Google), sessions,
+  collaborator roles, guest-board claiming (`src/http/routes/auth.ts`). The
+  email sender and OAuth library are not chosen yet.
 - **Jobs:** the sweep that deletes boards past `expires_at`.
 - **Ops:** Nginx (TLS + reverse proxy for `/api` and `/socket.io`) and the
   deploy pipeline for `api.skrivle.elpis.cc`.

@@ -8,7 +8,7 @@ Status: design notes. Nothing implemented yet.
 Browser (Next.js)                 Server (Express)                PostgreSQL
   React canvas                      Socket.IO gateway               users
   Yjs doc (client replica)  <--->   Yjs doc (in-memory, per board)  boards
-  Socket.IO client                  Auth (OAuth: GitHub, Google)    board_collaborators
+  Socket.IO client                  Auth (email code / GitHub / Google)  board_collaborators
                                     Snapshot writer                 board_snapshots
 ```
 
@@ -53,7 +53,10 @@ boards" — which is not a requirement here.
 ## Auth & ownership
 
 - Guests need no account. A guest board has `owner_id = NULL`.
-- OAuth sign-in (GitHub / Google) creates/links a `users` row.
+- Sign-in — an emailed one-time code, or OAuth (GitHub / Google) — creates or
+  links a `users` row. Email codes are short-lived, hashed, and stored in
+  `login_codes` (outside the core tables); they are not linked to a `users` row
+  until verified.
 - Signing in while on a guest board can claim it: set `owner_id`, add an `owner`
   row to `board_collaborators`, clear `is_ephemeral` / `expires_at`.
 - Roles: `owner`, `editor`. No finer tiers in v1.
@@ -69,8 +72,11 @@ boards" — which is not a requirement here.
 
 ```
 users
-  id, email (verifier only, e.g. OTP login), name, avatar_url,
-  provider (github/google), created_at
+  id, email (nullable — always set for email-code sign-in, may be absent for
+  OAuth), name, avatar_url, provider (email/github/google), created_at
+
+login_codes  (email sign-in; rows are short-lived)
+  id, email, code_hash, expires_at, consumed_at, attempts, created_at
 
 boards
   id, owner_id (nullable — null = anonymous/guest board), title,
@@ -105,3 +111,4 @@ Hosted under `elpis.cc`, split by tier:
   single-process.
 - Snapshot retention: keep last N per board, or just the latest.
 - Custom-id abuse (squatting, profanity) — allowlist/denylist or leave for later.
+- Email code delivery — SMTP vs. a transactional-email API provider.

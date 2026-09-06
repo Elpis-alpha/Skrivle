@@ -62,5 +62,5 @@ Scaffold only. Still to come (see [`docs/ROADMAP.md`](../docs/ROADMAP.md)):
 - Canvas: pan/zoom, dot grid, the settle animation
 - Tools: sticky note, text box, rectangle, circle, line/arrow, freehand pen
 - Yjs document + Socket.IO client, live cursors via Yjs awareness
-- OAuth sign-in (GitHub + Google), guest-board claiming, roles
+- Sign-in: emailed one-time code + GitHub + Google; guest-board claiming, roles
 - UI primitives (Button, IconButton, Input, Dialog, Toast, …)
