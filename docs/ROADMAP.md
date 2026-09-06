@@ -10,7 +10,8 @@
 - [x] Scaffold `front-end` (Next.js + Tailwind)
 - [x] Landing page + marketing surface (`/`, about, privacy, faq, contact, terms)
 - [ ] Back-end Docker Compose stack (back-end, postgres, nginx)
-- [x] `coming-soon` deployed (Cloudflare, `skrivle.elpis.cc`)
+- [x] `coming-soon` deployed (Cloudflare, `soon.skrivle.elpis.cc`)
+- [x] `front-end` deployed (Cloudflare Workers / OpenNext, `skrivle.elpis.cc`)
 
 ## Phase 1 — v1 demo-ready
 
@@ -28,7 +29,7 @@ Goal: the four success criteria in [PROJECT_BRIEF.md](../PROJECT_BRIEF.md) are m
 - [ ] Roles: owner / editor
 - [ ] Expiry sweep job
 - [x] `coming-soon` page + deployment
-- [ ] Public demo URL (front-end live)
+- [ ] Public demo URL (front-end shell is live at `skrivle.elpis.cc`; not "done" until the canvas ships)
 
 ## Phase 2 — Native app
 

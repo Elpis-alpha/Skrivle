@@ -27,7 +27,8 @@ npx playwright install chromium
 ## Deployment (Cloudflare Workers)
 
 Deployed to Cloudflare Workers as `skrivle-web` via
-[`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare). Config lives in
+[`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare), live at
+[`skrivle.elpis.cc`](https://skrivle.elpis.cc). Config lives in
 [`wrangler.jsonc`](wrangler.jsonc) and [`open-next.config.ts`](open-next.config.ts).
 
 ```bash

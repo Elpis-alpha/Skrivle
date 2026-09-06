@@ -13,7 +13,7 @@ Browser (Next.js)                 Server (Express)                PostgreSQL
 ```
 
 Hosting is split by tier. The `coming-soon/` static page and the `front-end/`
-(Next.js) are served by **Cloudflare**. Only the `back-end/` runs as a Docker
+(Next.js, deployed via OpenNext) are served by **Cloudflare**. Only the `back-end/` runs as a Docker
 Compose stack, with **Nginx** terminating TLS and reverse-proxying `/socket.io`
 + `/api` to the Express server. See [Deployment](#deployment) for domains.
 
@@ -89,12 +89,15 @@ Hosted under `elpis.cc`, split by tier:
 
 | Domain | Serves | Where |
 | --- | --- | --- |
-| `skrivle.elpis.cc` | `coming-soon/` now → `front-end/` once demo-ready | Cloudflare |
-| `soon.skrivle.elpis.cc` | `coming-soon/` (after the front-end takes the apex) | Cloudflare |
-| `api.skrivle.elpis.cc` | `back-end/` (`/socket.io` + `/api`) | Docker Compose + Nginx |
+| `skrivle.elpis.cc` | `front-end/` — **live** | Cloudflare Workers (OpenNext) |
+| `soon.skrivle.elpis.cc` | `coming-soon/` — **live** | Cloudflare |
+| `api.skrivle.elpis.cc` | `back-end/` (`/socket.io` + `/api`) — not yet deployed | Docker Compose + Nginx |
 
+- The front-end took the apex and `coming-soon/` moved to `soon.` on 2026-09-06;
+  only the API tier is still pending.
 - Back-end Compose stack: `back-end`, `postgres`, `nginx`.
-- Public demo URL is a v1 done-criterion.
+- The front-end URL is public, but the v1 "working demo URL" criterion is not met
+  until the canvas ships.
 
 ## Open questions
 
