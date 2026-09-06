@@ -68,7 +68,7 @@ export const AUTHOR = {
 const PHOTO_BASE = "https://res.cloudinary.com/elpis-cloud/image/upload";
 
 export const AUTHOR_PHOTOS = {
-  corporate: `${PHOTO_BASE}/f_auto,q_auto,c_scale,w_640/v1773224482/private/corporate_emkakn.jpg`,
+  corporate: `${PHOTO_BASE}/f_auto,q_auto,c_crop,g_north,h_0.65,w_640/v1773224482/private/corporate_emkakn.jpg`,
   native: `${PHOTO_BASE}/f_auto,q_auto,c_scale,w_640/v1773224482/private/native_p5rtat.jpg`,
   stylish: `${PHOTO_BASE}/f_auto,q_auto,c_scale,w_640/v1773224483/private/stylish_vudwvg.jpg`,
 } as const;
