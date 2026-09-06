@@ -1,2 +1,2 @@
 Placeholder. The Next.js web client lives here.
-Polyrepo plan: this becomes its own repo (skrivle-front-end) once it has substance.
+Monorepo: this folder owns its own package.json / dependencies / build.

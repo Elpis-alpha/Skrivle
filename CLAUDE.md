@@ -10,15 +10,16 @@ and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before starting work.
 
 ## Structure
 
-- `front-end/` — Next.js + Tailwind web client (polyrepo: → `skrivle-front-end`)
-- `back-end/` — Express + Socket.IO + Yjs server (polyrepo: → `skrivle-back-end`)
-- `app-native/` — React Native, phase 2 (polyrepo: → `skrivle-app-native`)
+- `front-end/` — Next.js + Tailwind web client
+- `back-end/` — Express + Socket.IO + Yjs server
+- `app-native/` — React Native, phase 2
 - `comming-soon/` — static holding page for the domain root
 - `docs/` — architecture, roadmap
 
-Each component folder currently holds only a `.keep`. They are separate projects
-that will be extracted to their own repos; do not add cross-folder imports or a
-shared workspace tool without asking.
+Monorepo: this is one GitHub repo (`Elpis-alpha/Skrivle`). Each component folder
+owns its own packages, dependencies, and build — treat them as independent
+projects. No shared/root workspace tooling; do not add cross-folder imports
+without asking. Each folder currently holds only a `.keep`.
 
 ## Conventions
 

@@ -9,16 +9,17 @@ persists boards long-term.
 
 ## Repository layout
 
-This is a workspace folder, not a single deployable. Each component is developed here
-and split into its own repo (polyrepo) once it has substance.
+Monorepo — one GitHub repo, one top-level folder per component. Each folder owns
+its own packages, dependencies, and build; there is no shared workspace tooling
+across them.
 
-| Folder | What it is | Future repo |
-| --- | --- | --- |
-| [`front-end/`](front-end/) | React / Next.js + Tailwind web client | `skrivle-front-end` |
-| [`back-end/`](back-end/) | Node.js / Express + Socket.IO + Yjs server | `skrivle-back-end` |
-| [`app-native/`](app-native/) | React Native app — phase 2 viewer / light editor | `skrivle-app-native` |
-| [`comming-soon/`](comming-soon/) | Static holding page served at the domain root until launch | — |
-| [`docs/`](docs/) | Architecture and roadmap | — |
+| Folder | What it is |
+| --- | --- |
+| [`front-end/`](front-end/) | React / Next.js + Tailwind web client |
+| [`back-end/`](back-end/) | Node.js / Express + Socket.IO + Yjs server |
+| [`app-native/`](app-native/) | React Native app — phase 2 viewer / light editor |
+| [`comming-soon/`](comming-soon/) | Static holding page served at the domain root until launch |
+| [`docs/`](docs/) | Architecture and roadmap |
 
 ## Documentation
 

@@ -1,2 +1,2 @@
 Placeholder. The Node.js/Express + Socket.IO + Yjs server lives here.
-Polyrepo plan: this becomes its own repo (skrivle-back-end) once it has substance.
+Monorepo: this folder owns its own package.json / dependencies / build.
