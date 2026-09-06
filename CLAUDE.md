@@ -14,7 +14,7 @@ and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before starting work.
 - `back-end/` — Express + Socket.IO + Yjs server
 - `app-native/` — React Native, phase 2
 - `comming-soon/` — static holding page for the domain root
-- `docs/` — architecture, roadmap
+- `docs/` — architecture, style guide, roadmap
 
 Monorepo: this is one GitHub repo (`Elpis-alpha/Skrivle`). Each component folder
 owns its own packages, dependencies, and build — treat them as independent
@@ -25,6 +25,10 @@ without asking. Each folder currently holds only a `.keep`.
 
 - Commits are made **only** through the `commit` skill (`/commit`) — never a bare
   `git add` / `git commit`. The skill's subagent review pass is the point.
+- All visual work follows [docs/STYLE_GUIDE.md](docs/STYLE_GUIDE.md): Poppins,
+  minimal, purple-tinted ink (not black), full amethyst `#32174D` only for the
+  primary action and your own presence. Tokens live in `:root` CSS vars + a
+  matching Tailwind config (both in the style guide).
 - Spelling `comming-soon` is intentional (matches the folder name).
 - Keep the relational schema shallow; canvas state is a Yjs doc persisted as a
   blob snapshot, never modeled as rows. See ARCHITECTURE.md for the trade-off.

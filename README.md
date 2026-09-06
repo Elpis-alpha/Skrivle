@@ -19,12 +19,13 @@ across them.
 | [`back-end/`](back-end/) | Node.js / Express + Socket.IO + Yjs server |
 | [`app-native/`](app-native/) | React Native app — phase 2 viewer / light editor |
 | [`comming-soon/`](comming-soon/) | Static holding page served at the domain root until launch |
-| [`docs/`](docs/) | Architecture and roadmap |
+| [`docs/`](docs/) | Architecture, style guide, roadmap |
 
 ## Documentation
 
 - [PROJECT_BRIEF.md](PROJECT_BRIEF.md) — what Skrivle is, why it exists, scope
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design, data model, real-time sync
+- [docs/STYLE_GUIDE.md](docs/STYLE_GUIDE.md) — design system: color, type, components, tokens
 - [docs/ROADMAP.md](docs/ROADMAP.md) — build phases and v1 done criteria
 - [CLAUDE.md](CLAUDE.md) — working notes for Claude Code sessions
 

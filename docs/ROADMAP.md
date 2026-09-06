@@ -4,6 +4,7 @@
 
 - [x] Repo structure, license, editorconfig
 - [x] Project brief + architecture notes
+- [x] Style guide / design system
 - [ ] Decide snapshot retention + scale-out stance
 - [ ] Scaffold `back-end` (Express + Socket.IO + Yjs, Postgres connection)
 - [ ] Scaffold `front-end` (Next.js + Tailwind)
