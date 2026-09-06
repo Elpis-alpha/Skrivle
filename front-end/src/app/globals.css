@@ -272,6 +272,12 @@
     border-color: var(--border);
   }
 
+  /* Nav links and #hash anchors (Faq's own "back to top" et al.) glide instead
+     of jumping. Reduced-motion already forces this back to `auto` below. */
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     background: var(--canvas-bg);
     color: var(--ink);
