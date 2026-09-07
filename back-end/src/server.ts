@@ -10,6 +10,7 @@ import { config } from "./config/env.js";
 import { dbHealthy } from "./db/prisma.js";
 import { errorHandler } from "./http/middleware/error-handler.js";
 import { notFound } from "./http/middleware/not-found.js";
+import { mountDocs } from "./http/openapi.js";
 import { apiRouter } from "./http/router.js";
 import { attachGateway } from "./realtime/gateway.js";
 import { redisHealthy } from "./redis/client.js";
@@ -48,6 +49,9 @@ export function createServer(): AppServer {
       redis: redis ? "up" : "down",
     });
   });
+
+  // Public API reference — /docs (Scalar) + /api/openapi.json.
+  mountDocs(app);
 
   app.use("/api", apiRouter);
   app.use(notFound);

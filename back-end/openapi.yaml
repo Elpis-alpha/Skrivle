@@ -1,0 +1,829 @@
+# Skrivle REST API — hand-authored, OpenAPI 3.1.
+#
+# Served as JSON at GET /api/openapi.json and rendered by Scalar at GET /docs
+# (src/http/openapi.ts). src/http/openapi.test.ts validates this document and
+# checks it against the live route table on every run.
+#
+# The realtime half of the API (a Yjs document per board over Socket.IO) is not
+# expressible in OpenAPI — see the top of src/protocol/events.ts for its wire
+# protocol.
+
+openapi: 3.1.0
+
+info:
+  title: Skrivle API
+  version: "1.0.0"
+  description: |
+    REST API and realtime gateway for Skrivle, a live collaborative whiteboard.
+
+    ## Authentication
+
+    Sign-in is passwordless: an emailed one-time code, or OAuth with GitHub or
+    Google. A successful sign-in sets an opaque `skrivle_session` cookie
+    (`HttpOnly`, `SameSite=Lax`), which authenticates every subsequent request.
+    There are no API keys or bearer tokens.
+
+    ## Editing is open by design
+
+    Anyone with a board's link may edit its canvas. Roles (`owner`, `editor`)
+    gate **management** — rename, delete, extend, claim — not drawing.
+
+    ## Guest boards
+
+    A board created without signing in is a guest board: it expires 24 hours
+    after creation. The browser that made it holds a `creatorToken` and can
+    extend it once (+48 hours) or claim it on sign-in.
+
+    ## Errors
+
+    Every error response is `{ "error": { "message", "next" } }` — `message`
+    says what happened, `next` says what to do about it.
+
+    ## Rate limits
+
+    Sign-in, board creation, availability checks, and upload signing are rate
+    limited per IP (and per email address for sign-in codes). A limited request
+    returns `429` with `Retry-After` and `RateLimit-*` headers.
+
+servers:
+  - url: http://localhost:4000
+    description: Local development
+  - url: https://api.skrivle.elpis.cc
+    description: Production
+
+tags:
+  - name: Health
+    description: Liveness and dependency status.
+  - name: Auth
+    description: Passwordless sign-in and session management.
+  - name: Boards
+    description: Board metadata, lifecycle, and ownership.
+  - name: Uploads
+    description: Signed direct-to-Cloudinary uploads.
+  - name: Me
+    description: The signed-in user's own profile.
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: skrivle_session
+      description: Opaque session token set by a successful sign-in.
+
+  parameters:
+    BoardId:
+      name: id
+      in: path
+      required: true
+      description: A 5-char generated code or a custom slug. Compared case-insensitively.
+      schema:
+        type: string
+        pattern: '^[a-zA-Z0-9-]{3,32}$'
+      example: q7fkc
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [message, next]
+          properties:
+            message:
+              type: string
+              description: What happened.
+              example: No board exists at that id.
+            next:
+              type: string
+              description: What to do about it.
+              example: Check the link, or create a new board with this id.
+
+    User:
+      type: object
+      required: [id, email, name, avatarUrl]
+      properties:
+        id:
+          type: string
+          example: clx8f2p9q0000abcd1234efgh
+        email:
+          type: string
+          format: email
+          example: ada@example.com
+        name:
+          type: string
+          example: ada
+        avatarUrl:
+          type: [string, "null"]
+          format: uri
+          description: Provider-supplied or a Cloudinary delivery URL; null if unset.
+
+    Role:
+      type: [string, "null"]
+      enum: [owner, editor, null]
+      description: The caller's role on the board, or null if they have none.
+
+    Board:
+      type: object
+      required: [id, title, isEphemeral, expiresAt, updatedAt, hasOwner, thumbnailUrl]
+      properties:
+        id:
+          type: string
+          description: 5-char generated code or a custom slug, lowercased.
+          example: q7fkc
+        title:
+          type: string
+          example: Sprint planning
+        isEphemeral:
+          type: boolean
+          description: True for a guest board that has not been claimed.
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: When a guest board expires. Null once claimed.
+        updatedAt:
+          type: string
+          format: date-time
+        hasOwner:
+          type: boolean
+        thumbnailUrl:
+          type: [string, "null"]
+          format: uri
+          description: Latest canvas thumbnail, or null before the first render.
+
+    BoardWithRole:
+      allOf:
+        - $ref: "#/components/schemas/Board"
+        - type: object
+          properties:
+            role:
+              $ref: "#/components/schemas/Role"
+
+    BoardSummary:
+      type: object
+      required: [id, title, updatedAt, role, thumbnailUrl]
+      properties:
+        id:
+          type: string
+          example: q7fkc
+        title:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        role:
+          type: string
+          enum: [owner, editor]
+        thumbnailUrl:
+          type: [string, "null"]
+          format: uri
+
+    UploadSignature:
+      type: object
+      required: [cloudName, apiKey, timestamp, signature, publicId]
+      properties:
+        cloudName:
+          type: string
+        apiKey:
+          type: string
+        timestamp:
+          type: integer
+          description: Unix seconds; the browser must post this exact value.
+        signature:
+          type: string
+          description: Cloudinary request signature, valid for one hour.
+        publicId:
+          type: string
+          description: Deterministic id derived from the board or user id.
+
+  responses:
+    BadRequest:
+      description: The request body, query, or path parameter failed validation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: No valid session cookie.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Authenticated, but not allowed to perform this action.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: No such board.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: Too many requests. See `Retry-After` and `RateLimit-*` headers.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ProviderUnavailable:
+      description: The feature is not configured on this deployment.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+security: []
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Liveness and dependency status
+      description: |
+        Returns `200` only when both Postgres and Redis are answering; `503`
+        otherwise. Both are load-bearing — sign-in needs Redis, boards need
+        Postgres.
+      security: []
+      responses:
+        "200":
+          description: Service and both dependencies healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, service, env, db, redis]
+                properties:
+                  ok: { type: boolean }
+                  service: { type: string, example: skrivle-api }
+                  env: { type: string, example: production }
+                  db: { type: string, enum: [up, down] }
+                  redis: { type: string, enum: [up, down] }
+        "503":
+          description: Postgres or Redis is unreachable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, const: false }
+                  db: { type: string, enum: [up, down] }
+                  redis: { type: string, enum: [up, down] }
+
+  /api/auth/email/request:
+    post:
+      tags: [Auth]
+      summary: Request an emailed one-time code
+      description: |
+        Sends a 6-digit code to the address, valid for 10 minutes. The response
+        is identical whether or not the address has an account and whether or
+        not mail actually sent — the form is not an oracle for which addresses
+        are registered.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+      responses:
+        "200":
+          description: Code sent (or suppressed by cooldown).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, expiresInSeconds]
+                properties:
+                  ok: { type: boolean, const: true }
+                  expiresInSeconds: { type: integer, example: 600 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/auth/email/verify:
+    post:
+      tags: [Auth]
+      summary: Exchange a one-time code for a session
+      description: |
+        On success, sets the `skrivle_session` cookie and returns the user. A
+        new account is created if the address has never signed in before.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email:
+                  type: string
+                  format: email
+                code:
+                  type: string
+                  pattern: '^\d{6}$'
+      responses:
+        "200":
+          description: Signed in. Sets the session cookie.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              example: skrivle_session=…; HttpOnly; SameSite=Lax; Path=/
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+        "400":
+          description: The code is wrong, expired, or has been tried too many times.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/auth/github:
+    get:
+      tags: [Auth]
+      summary: Start GitHub sign-in
+      description: Redirects (302) to GitHub's authorization page.
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema: { type: string }
+          description: Front-end path to return to after sign-in.
+        - name: claim
+          in: query
+          required: false
+          schema: { type: string }
+          description: Board id to claim once the session exists.
+      responses:
+        "302":
+          description: Redirect to GitHub.
+        "503": { $ref: "#/components/responses/ProviderUnavailable" }
+
+  /api/auth/google:
+    get:
+      tags: [Auth]
+      summary: Start Google sign-in
+      description: Redirects (302) to Google's authorization page.
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema: { type: string }
+        - name: claim
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "302":
+          description: Redirect to Google.
+        "503": { $ref: "#/components/responses/ProviderUnavailable" }
+
+  /api/auth/callback/{provider}:
+    get:
+      tags: [Auth]
+      summary: OAuth callback
+      description: |
+        The provider redirects here with `code` and `state`. On success this
+        sets the session cookie and redirects (302) back to the front-end; on
+        any failure it redirects to the front-end with an `error` query
+        parameter. It never returns a body.
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string, enum: [github, google] }
+        - name: code
+          in: query
+          required: false
+          schema: { type: string }
+        - name: state
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "302":
+          description: Redirect back to the front-end, signed in or with an error code.
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current session and available sign-in methods
+      security: []
+      responses:
+        "200":
+          description: The signed-in user (or null), plus which methods this deployment offers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user, methods]
+                properties:
+                  user:
+                    oneOf:
+                      - $ref: "#/components/schemas/User"
+                      - type: "null"
+                  methods:
+                    type: object
+                    properties:
+                      email: { type: boolean }
+                      github: { type: boolean }
+                      google: { type: boolean }
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: End the current session
+      security: []
+      responses:
+        "204":
+          description: Session destroyed and cookie cleared. Idempotent.
+
+  /api/auth/logout/all:
+    post:
+      tags: [Auth]
+      summary: End every session for the current user
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: All sessions destroyed and cookie cleared.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/boards:
+    post:
+      tags: [Boards]
+      summary: Create a board
+      description: |
+        With a session, the board is owned and permanent. Without one, it is a
+        guest board — ephemeral, with a `creatorToken` in the response that the
+        creating browser must keep to extend or claim it later.
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customId:
+                  type: string
+                  minLength: 3
+                  maxLength: 32
+                  pattern: '^[a-zA-Z0-9-]{3,32}$'
+                  description: Optional custom slug. Omit for a generated 5-char code.
+                title:
+                  type: string
+                  maxLength: 120
+      responses:
+        "201":
+          description: Board created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Board"
+                  - type: object
+                    properties:
+                      creatorToken:
+                        type: [string, "null"]
+                        description: Present (non-null) only for guest boards.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409":
+          description: The requested `customId` is already taken.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429": { $ref: "#/components/responses/RateLimited" }
+    get:
+      tags: [Boards]
+      summary: List the current user's boards ("My Boards")
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Boards the user owns or collaborates on, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [boards]
+                properties:
+                  boards:
+                    type: array
+                    items: { $ref: "#/components/schemas/BoardSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/boards/{id}/available:
+    get:
+      tags: [Boards]
+      summary: Check whether a board id is free
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+      responses:
+        "200":
+          description: Availability of the id.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available]
+                properties:
+                  available: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/boards/{id}:
+    get:
+      tags: [Boards]
+      summary: Look up a board
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+      responses:
+        "200":
+          description: The board. `role` is the caller's role, or null.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardWithRole"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: No board has ever existed at that id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "410":
+          description: The board existed and has expired.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    patch:
+      tags: [Boards]
+      summary: Rename a board
+      description: Owner only.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+      responses:
+        "200":
+          description: The updated board.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Board" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      tags: [Boards]
+      summary: Delete a board
+      description: Owner only. Also removes the canvas snapshot and thumbnail.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+      responses:
+        "204":
+          description: Deleted.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/boards/{id}/extend:
+    post:
+      tags: [Boards]
+      summary: Extend a guest board's expiry
+      description: |
+        Adds 48 hours. Authorised by the `creatorToken` from board creation, not
+        a session — so the creating browser can extend without signing in.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [creatorToken]
+              properties:
+                creatorToken:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+      responses:
+        "200":
+          description: New expiry.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [expiresAt]
+                properties:
+                  expiresAt: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403":
+          description: The token does not match this board.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/boards/{id}/claim:
+    post:
+      tags: [Boards]
+      summary: Claim a guest board on sign-in
+      description: |
+        Makes the current user the owner of an unowned board. The `creatorToken`
+        proves the caller created it; a board can only be claimed while it has
+        no owner.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                creatorToken:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+      responses:
+        "200":
+          description: The claimed board, now owned by the caller.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Board" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: The board already has an owner, or the token does not match.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/boards/{id}/thumbnail:
+    post:
+      tags: [Boards]
+      summary: Record a freshly uploaded canvas thumbnail
+      description: |
+        Called after the browser uploads a thumbnail to Cloudinary with a
+        signature from `/api/uploads/signature`. The `publicId` is verified
+        against the board id — no round trip to Cloudinary is needed.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/BoardId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [publicId]
+              properties:
+                publicId:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+      responses:
+        "200":
+          description: Thumbnail recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [thumbnailUrl]
+                properties:
+                  thumbnailUrl: { type: string, format: uri }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403":
+          description: The `publicId` is not this board's thumbnail.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No live board at that id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/uploads/signature:
+    post:
+      tags: [Uploads]
+      summary: Mint a signed Cloudinary upload
+      description: |
+        Returns parameters for a direct browser-to-Cloudinary upload. The
+        `publicId` is derived server-side from the board or user id, so a
+        signature can never be pointed at someone else's asset. Image data
+        never passes through this server.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [kind, boardId]
+                  properties:
+                    kind: { type: string, const: thumbnail }
+                    boardId: { type: string, minLength: 3, maxLength: 32 }
+                - type: object
+                  required: [kind]
+                  properties:
+                    kind: { type: string, const: avatar }
+      responses:
+        "200":
+          description: Upload signature and parameters.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadSignature" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401":
+          description: An avatar upload was requested without a session.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: A thumbnail upload named a missing or expired board.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ProviderUnavailable" }
+
+  /api/me:
+    patch:
+      tags: [Me]
+      summary: Update the signed-in user's profile
+      description: |
+        Change the display name, set a custom avatar (an `avatarPublicId` the
+        browser just uploaded), or clear it with `null` to fall back to the
+        OAuth provider's picture.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 60
+                avatarPublicId:
+                  type: [string, "null"]
+                  maxLength: 200
+      responses:
+        "200":
+          description: The updated user.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: The `avatarPublicId` does not belong to this account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }

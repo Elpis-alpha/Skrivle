@@ -57,6 +57,7 @@ runs as the `redis` service and the container's `REDIS_URL` is overridden to
 | `src/media/cloudinary.ts` | signed direct uploads, delivery URLs, cleanup |
 | `src/boards/` | id rules (mirrors the front-end) + board service |
 | `src/http/` | `/api` routes (`boards`, `auth`, `uploads`, `me`) + middleware |
+| `src/http/openapi.ts` / `openapi.yaml` | hand-authored OpenAPI 3.1 spec, served at `/api/openapi.json` and rendered by Scalar at `/docs` |
 | `src/realtime/` | Socket.IO gateway, doc registry, Yjs bridge, awareness, snapshots |
 | `src/jobs/expiry-sweep.ts` | deletes boards past `expires_at`, and their thumbnails |
 | `src/presence/cursor-colors.ts` | cursor palette, mirrors the front-end order |
@@ -88,6 +89,11 @@ POST   /api/boards/:id/thumbnail     { publicId }     -> { thumbnailUrl }
 POST   /api/uploads/signature        { kind, boardId? } -> Cloudinary params
 PATCH  /api/me                       { name?, avatarPublicId? }
 ```
+
+Interactive reference (Scalar) at **`/docs`**; the raw document at
+**`/api/openapi.json`**. Both are public. The spec is hand-authored in
+`openapi.yaml` — `src/http/openapi.test.ts` validates it and checks it against
+the live route table on every test run.
 
 The realtime protocol is documented at the top of `src/protocol/events.ts`. The
 board is chosen in the Socket.IO **handshake**, not by an event.
