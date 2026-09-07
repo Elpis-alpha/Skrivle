@@ -18,10 +18,12 @@
 Goal: the four success criteria in [PROJECT_BRIEF.md](../PROJECT_BRIEF.md) are met.
 
 - [x] Create board → redirect to `/board/:id`
-- [ ] Canvas with pan/zoom (the doc and transport are live; tools plug into them)
+- [x] Canvas with pan/zoom (wheel/trackpad, space- or middle-drag, Hand tool)
 - [x] Board REST: create, lookup, availability, rename, delete, extend, claim
 - [x] Cloudinary: signed uploads for board thumbnails and avatars
-- [ ] Tools: sticky note, text box, rectangle, circle, line/arrow, freehand pen
+- [x] Tools: sticky note, text box, rectangle, circle, line/arrow, freehand pen
+- [x] Select, marquee multi-select, move, resize, delete, and undo/redo
+- [x] Board thumbnails rendered client-side and uploaded to Cloudinary
 - [x] Yjs doc per board, Socket.IO relay, and the client replica
 - [x] Live cursors via Yjs awareness (name + color)
 - [x] Snapshot persistence (interval + last-disconnect + shutdown) and rehydrate on load

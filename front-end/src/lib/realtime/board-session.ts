@@ -61,8 +61,28 @@ export type BoardSessionState = {
 /** Origin tag for everything that arrived from the server, so we never echo it back. */
 const REMOTE = Symbol("remote");
 
-/** Paired with the ~70ms cursor interpolation in STYLE_GUIDE §7. */
-const CURSOR_PUBLISH_MS = 50;
+/**
+ * Origin tag for edits this user made, which is what the drawing tools transact
+ * under.
+ *
+ * Anything that isn't REMOTE already broadcasts, so this changes nothing here —
+ * it exists so the UndoManager can track *only* deliberate local edits. A bare
+ * `doc.transact(fn)` gets `origin === null`, which Yjs tracks by default, so a
+ * maintenance pass that forgot an origin would otherwise land on the user's undo
+ * stack.
+ */
+export const LOCAL = Symbol("local");
+
+/**
+ * How often local state goes out on the wire — cursors here, in-progress pen
+ * strokes in the drawing tools.
+ *
+ * Paired with the ~70ms cursor interpolation in STYLE_GUIDE §7, and deliberately
+ * one number for the whole product: local rendering runs at animation rate, the
+ * network never does. Socket.IO sends a binary event as two frames, so the cost
+ * of publishing is dominated by message count rather than payload size.
+ */
+export const PUBLISH_MS = 50;
 
 /** Movements smaller than this aren't worth a frame on the wire. */
 const CURSOR_EPSILON = 0.5;
@@ -313,7 +333,7 @@ export function createBoardSession(
     publish(pending);
     // Keep the window open so a continuous drag stays throttled rather than
     // firing immediately on the next move.
-    flushTimer = setTimeout(flush, CURSOR_PUBLISH_MS);
+    flushTimer = setTimeout(flush, PUBLISH_MS);
   }
 
   function setCursor(point: { x: number; y: number } | null): void {
@@ -335,7 +355,7 @@ export function createBoardSession(
       // Leading edge: the first move of a gesture goes out immediately.
       hasPending = false;
       publish(point);
-      flushTimer = setTimeout(flush, CURSOR_PUBLISH_MS);
+      flushTimer = setTimeout(flush, PUBLISH_MS);
     }
   }
 

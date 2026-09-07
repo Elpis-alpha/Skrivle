@@ -24,6 +24,18 @@ import { EVENTS } from "../protocol/events.js";
  */
 export const MAX_UPDATE_BYTES = 1024 * 1024;
 
+/**
+ * The transport ceiling, deliberately well above MAX_UPDATE_BYTES.
+ *
+ * They used to be equal, which quietly made the named error above unreachable:
+ * anything big enough to trip it was already killed by the buffer limit, with
+ * no message at all. Worse, the one update a client legitimately sends at size
+ * is the reconnect catch-up — encodeStateAsUpdate of everything drawn during an
+ * outage. At an equal ceiling, a client that drew more than a megabyte offline
+ * has every reconnect attempt dropped, forever, silently.
+ */
+export const MAX_FRAME_BYTES = 8 * 1024 * 1024;
+
 /** Open the handshake by advertising what the server already has. */
 export function sendInitialSync(socket: Socket, doc: Y.Doc): void {
   socket.emit(EVENTS.SYNC_STEP, Y.encodeStateVector(doc));

@@ -1,7 +1,13 @@
 // Board endpoints. back-end/src/http/routes/boards.ts
 
 import { apiFetch } from "./fetch";
-import type { Board, BoardSummary, BoardWithRole, CreatedBoard } from "./types";
+import type {
+  Board,
+  BoardSummary,
+  BoardWithRole,
+  CreatedBoard,
+  UploadSignature,
+} from "./types";
 
 /**
  * Signed out: an ephemeral board expiring in 24h, with a one-time creatorToken.
@@ -82,5 +88,34 @@ export function renameBoard(id: string, title: string): Promise<Board> {
 export function deleteBoard(id: string): Promise<void> {
   return apiFetch<void>(`/api/boards/${encodeURIComponent(id)}`, {
     method: "DELETE",
+  });
+}
+
+/**
+ * Ask for permission to upload this board's thumbnail.
+ *
+ * Valid for an hour and rate limited to 60/hour/IP, so callers cache it rather
+ * than signing per save.
+ */
+export function signThumbnailUpload(id: string): Promise<UploadSignature> {
+  return apiFetch("/api/uploads/signature", {
+    method: "POST",
+    body: { kind: "thumbnail", boardId: id },
+  });
+}
+
+/**
+ * Tell the server which Cloudinary asset is now this board's thumbnail.
+ *
+ * The image itself never passes through our API — it goes browser-to-Cloudinary
+ * against the signature above, and this is only the confirmation.
+ */
+export function setBoardThumbnail(
+  id: string,
+  publicId: string,
+): Promise<{ thumbnailUrl: string | null }> {
+  return apiFetch(`/api/boards/${encodeURIComponent(id)}/thumbnail`, {
+    method: "POST",
+    body: { publicId },
   });
 }

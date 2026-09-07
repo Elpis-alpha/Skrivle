@@ -24,7 +24,7 @@ import { acquireDoc, releaseDoc, socketCount, trackSocket, untrackSocket } from 
 import { persistSnapshot } from "./snapshot-writer.js";
 import {
   applyClientUpdate,
-  MAX_UPDATE_BYTES,
+  MAX_FRAME_BYTES,
   roomFor,
   sendInitialSync,
   sendMissingUpdates,
@@ -65,9 +65,11 @@ export function attachGateway(httpServer: HttpServer): IOServer {
   const io = new IOServer(httpServer, {
     path: "/socket.io",
     cors: { origin: config.corsOrigins, credentials: true },
-    // Yjs updates are binary and can be sizeable on a busy board, but not
-    // unbounded. yjs-bridge enforces the same ceiling with a named error.
-    maxHttpBufferSize: MAX_UPDATE_BYTES,
+    // The transport ceiling sits above the per-update one on purpose, so an
+    // oversized edit is refused by applyClientUpdate with a message the client
+    // can show, rather than having its connection torn down without one. See
+    // MAX_FRAME_BYTES.
+    maxHttpBufferSize: MAX_FRAME_BYTES,
   });
 
   // Authentication and authorization happen once, here, before any event

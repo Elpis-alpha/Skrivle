@@ -59,12 +59,32 @@ real sign-in (emailed code, GitHub, Google), server-minted board ids, guest
 board claiming and extension, `/boards`, and live presence cursors. End-to-end
 tests start a real back-end and cover sign-in and two-tab cursor sync.
 
-**The drawing tools are the remaining v1 work** — pan/zoom and the six tools.
-The Yjs document and its transport are already live, so a tool reads and writes
-the root types in `front-end/src/lib/realtime/doc-schema.ts` and nothing else.
-Board thumbnails are also still owed. See [docs/ROADMAP.md](docs/ROADMAP.md).
+**The canvas is built.** Pan/zoom, the eight tools, selection with marquee and
+resize, undo/redo, and client-rendered board thumbnails. The element schema
+lives in `front-end/src/lib/realtime/doc-schema.ts`; every write goes through
+`src/lib/board/elements.ts`, which wraps each gesture in one `doc.transact` under
+the `LOCAL` origin. What remains for v1 is the public demo deploy — see
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
-Two things worth knowing before touching this seam:
+Four things worth knowing before touching this seam:
+
+- **A `Y.Map`'s own observer does not fire for changes inside a nested `Y.Text`
+  or `Y.Array`,** and a *deleted* type's observer never fires at all. So an
+  element hook subscribes to its own map **and** to the parent `elements` map
+  (the only thing that reports its own deletion), while text and pen samples get
+  their own subscriptions. `src/lib/realtime/useElements.ts` has the detail.
+- **The camera never goes through React state.** `CameraLayer` writes the
+  transform and `--cam-scale` from a rAF, so a wheel tick doesn't reconcile
+  every element — and, more importantly, remote cursors share that one transform
+  rather than landing a frame behind it.
+- **Local rendering runs at animation rate; the network never does.** Drags and
+  strokes paint every frame but only write to the doc every `PUBLISH_MS` (50ms).
+  Socket.IO sends a binary event as two frames and nothing rate-limits sockets,
+  so writing per sample would be ~120 frames/sec per person drawing.
+- **React registers `wheel` as a passive listener,** so `preventDefault()` in an
+  `onWheel` prop does nothing. Zoom is a native listener with `passive: false`.
+
+Two more, about the tiers:
 
 - The API types in `front-end/src/lib/api/types.ts` mirror
   `back-end/openapi.yaml` **by hand** (no codegen, no cross-folder imports), as

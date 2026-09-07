@@ -62,3 +62,15 @@ export type BoardSummary = {
 };
 
 export type OAuthProvider = "github" | "google";
+
+/**
+ * Cloudinary parameters, minted by our server, that authorise one direct
+ * browser upload. Mirrors UploadSignature in back-end/src/media/cloudinary.ts.
+ */
+export type UploadSignature = {
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  signature: string;
+  publicId: string;
+};
