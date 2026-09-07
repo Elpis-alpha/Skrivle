@@ -12,8 +12,10 @@ import {
   useId,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { checkBoardIdAvailable, createBoard } from "@/lib/api/boards";
 import { isApiError } from "@/lib/api/errors";
@@ -39,7 +41,10 @@ type Problem = { message: string; next?: string };
 
 function problemFrom(err: unknown): Problem {
   if (isApiError(err)) return { message: err.message, next: err.next };
-  return { message: "Couldn't create the board.", next: "Try again in a moment." };
+  return {
+    message: "Couldn't create the board.",
+    next: "Try again in a moment.",
+  };
 }
 
 export function CreateBoardDialog({
@@ -69,6 +74,18 @@ export function CreateBoardDialog({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
 
+  // The standard SSR-safe portal gate: `document` doesn't exist on the
+  // server, so the server snapshot is false and the client one is true —
+  // never actually subscribes to anything, it only needs the framework to
+  // tell the two environments apart. `open` is always false on the server
+  // anyway (it can only become true from a client click), so this costs
+  // nothing visible.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+
   // A ref write, not state — safe inside an effect, unsafe during render.
   useEffect(() => {
     if (open) triggerFocus.current = document.activeElement;
@@ -95,7 +112,12 @@ export function CreateBoardDialog({
     (triggerFocus.current as HTMLElement | null)?.focus?.();
   }, [onClose]);
 
-  // Body scroll lock while open, mirroring SiteHeader's mobile panel.
+  // Body scroll lock while open, mirroring SiteHeader's mobile panel: locked
+  // the instant it opens, unlocked only once the exit animation actually
+  // finishes (the AnimatePresence onExitComplete below) — not the instant
+  // `open` flips to false, or the page would jump while the dialog is still
+  // visibly fading out. A bare unlock-on-`open`-false effect would never fire
+  // at all, since this component stays mounted between opens.
   useEffect(() => {
     if (open) document.body.style.overflow = "hidden";
   }, [open]);
@@ -118,7 +140,7 @@ export function CreateBoardDialog({
       if (event.key !== "Tab") return;
 
       const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled])',
+        "a[href], button:not([disabled]), input:not([disabled])",
       );
       if (!focusable?.length) return;
 
@@ -169,7 +191,8 @@ export function CreateBoardDialog({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy || availability === "checking" || availability === "invalid") return;
+    if (busy || availability === "checking" || availability === "invalid")
+      return;
 
     const id = customId.trim();
     if (availability === "taken") {
@@ -210,8 +233,25 @@ export function CreateBoardDialog({
         ? "That id is already taken."
         : "Leave blank and we'll generate one.";
 
-  return (
-    <AnimatePresence>
+  if (!mounted) return null;
+
+  // Portalled to <body> rather than rendered in place: NewBoardButton is used
+  // inside SiteHeader, whose <header> sets backdrop-blur — a non-none
+  // backdrop-filter creates a new containing block for `position: fixed`
+  // descendants, which would pin this dialog's scrim to the 64px header bar
+  // instead of the viewport (the exact bug SiteHeader's own mobile panel
+  // comment describes, for the same reason). Portalling also means the
+  // dialog is never a DOM descendant of whatever ancestor happened to render
+  // the trigger, so it can't inherit stray layout like ClosingCta's
+  // `text-center` either.
+  //
+  // The portal call itself is unconditional — only its content toggles on
+  // `open` — because AnimatePresence needs to stay mounted across the
+  // open→close transition to run the exit animation at all; portalling only
+  // while `open` is true would unmount AnimatePresence in the same instant as
+  // its child, skipping the exit entirely.
+  return createPortal(
+    <AnimatePresence onExitComplete={() => (document.body.style.overflow = "")}>
       {open ? (
         <motion.div
           className="fixed inset-0 z-70 flex items-center justify-center bg-[rgba(26,22,32,0.4)] p-4 backdrop-blur-[2px]"
@@ -257,8 +297,15 @@ export function CreateBoardDialog({
               </button>
             </div>
 
-            <form onSubmit={(event) => void submit(event)} noValidate className="mt-4">
-              <label htmlFor={idFieldId} className="text-sm font-medium text-ink">
+            <form
+              onSubmit={(event) => void submit(event)}
+              noValidate
+              className="mt-4"
+            >
+              <label
+                htmlFor={idFieldId}
+                className="text-sm font-medium text-ink"
+              >
                 Board id
               </label>
               <div
@@ -294,9 +341,16 @@ export function CreateBoardDialog({
                   aria-describedby={`${idFieldId}-hint`}
                   className="h-full min-w-0 flex-1 bg-transparent pr-2 text-base text-ink outline-none placeholder:text-ink-muted"
                 />
-                <span className="flex shrink-0 items-center pr-3" aria-hidden="true">
+                <span
+                  className="flex shrink-0 items-center pr-3"
+                  aria-hidden="true"
+                >
                   {availability === "checking" ? (
-                    <Loader2 size={16} strokeWidth={2} className="animate-spin text-ink-muted" />
+                    <Loader2
+                      size={16}
+                      strokeWidth={2}
+                      className="animate-spin text-ink-muted"
+                    />
                   ) : availability === "available" ? (
                     <Check size={16} strokeWidth={2} className="text-success" />
                   ) : availability === "taken" ? (
@@ -306,13 +360,20 @@ export function CreateBoardDialog({
               </div>
               <p
                 id={`${idFieldId}-hint`}
-                className={"mt-2 text-xs " + (idInvalid ? "text-danger" : "text-ink-muted")}
+                className={
+                  "mt-2 text-xs " +
+                  (idInvalid ? "text-danger" : "text-ink-muted")
+                }
               >
                 {idHint}
               </p>
 
-              <label htmlFor={titleFieldId} className="mt-4 block text-sm font-medium text-ink">
-                Title <span className="font-normal text-ink-muted">(optional)</span>
+              <label
+                htmlFor={titleFieldId}
+                className="mt-4 block text-sm font-medium text-ink"
+              >
+                Title{" "}
+                <span className="font-normal text-ink-muted">(optional)</span>
               </label>
               <input
                 id={titleFieldId}
@@ -324,9 +385,15 @@ export function CreateBoardDialog({
               />
 
               {problem ? (
-                <p id={problemId} role="alert" className="mt-4 text-xs text-danger">
+                <p
+                  id={problemId}
+                  role="alert"
+                  className="mt-4 text-xs text-danger"
+                >
                   {problem.message}
-                  {problem.next ? <span className="text-ink-muted"> {problem.next}</span> : null}
+                  {problem.next ? (
+                    <span className="text-ink-muted"> {problem.next}</span>
+                  ) : null}
                 </p>
               ) : null}
 
@@ -348,6 +415,7 @@ export function CreateBoardDialog({
           </motion.div>
         </motion.div>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

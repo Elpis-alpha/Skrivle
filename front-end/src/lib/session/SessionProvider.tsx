@@ -67,8 +67,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [nonce]);
 
   useEffect(() => {
-    // This provider mounts on every product surface and nowhere else, which
-    // makes it the right place to expire stale guest board tokens.
+    // This provider mounts once for the whole app, which makes it the right
+    // place to expire stale guest board tokens.
     pruneCreatorTokens();
   }, []);
 
@@ -95,9 +95,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 export function useSession(): SessionValue {
   const value = useContext(SessionContext);
   if (!value) {
-    throw new Error(
-      "useSession must be used inside the (product) route group's SessionProvider.",
-    );
+    throw new Error("useSession must be used inside the root SessionProvider.");
   }
   return value;
 }

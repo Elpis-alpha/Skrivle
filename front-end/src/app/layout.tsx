@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import { SITE } from "@/lib/site";
+import { SessionProvider } from "@/lib/session/SessionProvider";
 
 // STYLE_GUIDE.md §3 — one family. 400/500/600 for UI, 700 for the wordmark only.
 const poppins = Poppins({
@@ -44,7 +45,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>
-      <body className="min-h-full antialiased">{children}</body>
+      <body className="min-h-full antialiased">
+        {/* One instance for the whole app, not one per route group: layouts
+            unmount when navigation crosses a route-group boundary, so two
+            separate providers would refetch /api/auth/me — and flash the
+            header back to "loading" — on every trip between marketing and
+            product surfaces. Marketing pages didn't need this before
+            SiteHeader had to know whether you're signed in; now every page
+            does, so the one credentialed GET per session is no longer a cost
+            worth avoiding. */}
+        <SessionProvider>{children}</SessionProvider>
+      </body>
     </html>
   );
 }

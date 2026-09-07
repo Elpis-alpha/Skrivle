@@ -8,9 +8,9 @@ import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Button } from "@/components/ui/Button";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { ThemeToggle } from "@/components/site/ThemeToggle";
+import { UserMenu } from "@/components/site/UserMenu";
 import { NAV_LINKS } from "@/lib/site";
 import { NewBoardButton } from "@/components/landing/NewBoardButton";
 
@@ -136,9 +136,7 @@ export function SiteHeader() {
           {/* Hidden on a wrapper, not on the buttons: Button sets its own
               `display`, and a `hidden` utility alongside it loses the tie. */}
           <div className="hidden items-center gap-2 sm:flex">
-            <Button href="/signin" variant="ghost" size="sm">
-              Sign in
-            </Button>
+            <UserMenu size="sm" />
             <NewBoardButton size="sm">New board</NewBoardButton>
           </div>
 
@@ -222,9 +220,7 @@ export function SiteHeader() {
                 <NewBoardButton size="lg" onNavigate={() => setMenuOpen(false)}>
                   New board
                 </NewBoardButton>
-                <Button href="/signin" variant="secondary" size="lg">
-                  Sign in
-                </Button>
+                <UserMenu size="lg" onNavigate={() => setMenuOpen(false)} />
               </div>
             </nav>
           </motion.div>

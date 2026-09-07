@@ -157,4 +157,35 @@ describe("CreateBoardDialog", () => {
 
     expect(onClose).toHaveBeenCalled();
   });
+
+  // Regression: NewBoardButton is used inside SiteHeader, whose <header> sets
+  // backdrop-blur — a containing block for `position: fixed` descendants that
+  // would otherwise pin the scrim to the header bar instead of the viewport.
+  it("portals to document.body rather than rendering where it's mounted", () => {
+    const { baseElement } = render(
+      <div data-testid="ancestor" style={{ textAlign: "center" }}>
+        <CreateBoardDialog open onClose={vi.fn()} onCreated={vi.fn()} />
+      </div>,
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(screen.queryByTestId("ancestor")).not.toContainElement(dialog);
+    expect(baseElement).toContainElement(dialog);
+  });
+
+  // Regression: the scroll lock has to unlock again once `open` goes back to
+  // false, not just on unmount (which never happens — NewBoardButton always
+  // renders this component, only `open` toggles). `open` is a controlled
+  // prop here, so the parent flipping it on onClose is simulated by hand.
+  it("locks body scroll while open and releases it once closed", async () => {
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <CreateBoardDialog open onClose={onClose} onCreated={vi.fn()} />,
+    );
+    expect(document.body.style.overflow).toBe("hidden");
+
+    rerender(<CreateBoardDialog open={false} onClose={onClose} onCreated={vi.fn()} />);
+
+    await waitFor(() => expect(document.body.style.overflow).toBe(""));
+  });
 });
