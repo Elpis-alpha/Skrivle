@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { generateBoardId, isValidCustomId, mintUniqueBoardId } from "./board-id.js";
+import {
+  generateBoardId,
+  ID_ALPHABET,
+  isValidCustomId,
+  mintUniqueBoardId,
+  normalizeBoardId,
+} from "./board-id.js";
 
 describe("generateBoardId", () => {
   it("returns five characters by default", () => {
@@ -48,5 +54,42 @@ describe("mintUniqueBoardId", () => {
     await expect(mintUniqueBoardId(async () => true)).rejects.toThrow(
       /unique board id/,
     );
+  });
+});
+
+describe("normalizeBoardId", () => {
+  it("lowercases and trims", () => {
+    expect(normalizeBoardId("  Sprint-Planning  ")).toBe("sprint-planning");
+  });
+
+  it("makes a link that got title-cased still resolve", () => {
+    expect(normalizeBoardId("K3M9P")).toBe(normalizeBoardId("k3m9p"));
+  });
+});
+
+describe("generateBoardId distribution", () => {
+  it("uses every character of the alphabet about equally often", () => {
+    // Guards the rejection sampling in generateBoardId. The naive `byte % 28`
+    // makes the first four letters exactly 9.4% likelier than the rest, so the
+    // bounds here have to be tighter than that to be worth anything.
+    //
+    // 200k samples put the standard error near 1.2% of the expected count, so
+    // a 6% band is ~5 sigma for correct output (no flaking) while still sitting
+    // well inside the 9.4% skew a biased implementation produces.
+    const counts = new Map<string, number>();
+    const perDraw = 40;
+    const draws = 5_000;
+    for (let i = 0; i < draws; i++) {
+      for (const char of generateBoardId(perDraw)) {
+        counts.set(char, (counts.get(char) ?? 0) + 1);
+      }
+    }
+
+    expect(counts.size).toBe(ID_ALPHABET.length);
+    const expected = (draws * perDraw) / ID_ALPHABET.length;
+    for (const [char, count] of counts) {
+      expect(count / expected, `char ${char}`).toBeGreaterThan(0.94);
+      expect(count / expected, `char ${char}`).toBeLessThan(1.06);
+    }
   });
 });

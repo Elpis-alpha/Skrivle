@@ -1,6 +1,12 @@
 // Skrivle relational schema — docs/ARCHITECTURE.md#data-model.
-// Kept deliberately shallow: canvas state is a Yjs CRDT persisted as a binary
-// snapshot blob (BoardSnapshot.docState), never modelled as rows.
+//
+// Kept deliberately shallow, and deliberately free of append-only tables:
+//   - Canvas state is a Yjs CRDT held as one binary blob per board (BoardDoc),
+//     never modelled as rows.
+//   - Sessions, sign-in codes, and OAuth state live in Redis, not here. They
+//     are high-churn and TTL-shaped; Postgres holds only durable records.
+//
+// The result is that no table grows unless the number of boards or users does.
 
 generator client {
   provider = "prisma-client-js"
@@ -24,39 +30,77 @@ enum CollaboratorRole {
 
 /// A signed-in user. No passwords — an emailed one-time code, or OAuth.
 model User {
-  id        String       @id @default(cuid())
-  /// Always set for one-time-code sign-in; may be null for OAuth when the
-  /// provider withholds it (GitHub / Google).
-  email     String?      @unique
-  name      String
-  avatarUrl String?
-  provider  AuthProvider
-  createdAt DateTime     @default(now())
+  id String @id @default(cuid())
 
+  /// Non-null: every sign-in path yields an address we have seen verified
+  /// (Google's email claim, GitHub's verified primary, or the OTP address
+  /// itself). This is what makes cross-provider linking possible.
+  email String @unique
+  name  String
+
+  /// Provider-supplied URL, or a Cloudinary delivery URL once self-uploaded.
+  avatarUrl      String?
+  /// Set only when the avatar is ours in Cloudinary — drives deletion cleanup.
+  avatarPublicId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  identities     Identity[]
   ownedBoards    Board[]             @relation("BoardOwner")
   collaborations BoardCollaborator[]
 
   @@map("users")
 }
 
-/// Board metadata. The canvas itself lives in BoardSnapshot, not here.
+/// One row per (provider, account) pair — the table that lets Google, GitHub,
+/// and email sign-in resolve to one person.
+///
+/// Deliberately carries no access/refresh token columns: Skrivle never calls a
+/// provider API after sign-in, so storing them would be liability without use.
+model Identity {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider          AuthProvider
+  /// The provider's stable subject id. For `email`, the lowercased address.
+  providerAccountId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("identities")
+}
+
+/// Board metadata. The canvas itself lives in BoardDoc, not here.
 model Board {
-  /// The user-facing id: a 5-char generated code or a custom slug. Immutable.
-  id               String    @id
-  ownerId          String?
+  /// The user-facing id: a 5-char generated code or a custom slug, stored
+  /// lowercased. Immutable once created.
+  id String @id
+
+  ownerId String?
   /// Null owner = an anonymous guest board.
-  owner            User?     @relation("BoardOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  owner   User?   @relation("BoardOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
   title            String    @default("Untitled board")
   isEphemeral      Boolean   @default(true)
   /// Guest boards expire (created_at + 24h); the creator can extend by +48h.
   expiresAt        DateTime?
-  /// Hashed creator token — lets whoever made a guest board extend it without signing in.
+  /// HMAC of the creator token — lets whoever made a guest board extend or
+  /// claim it without signing in.
   creatorTokenHash String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
 
+  /// Cloudinary public_id of the latest canvas thumbnail. Null until the first
+  /// render is uploaded.
+  thumbnailId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doc           BoardDoc?
   collaborators BoardCollaborator[]
-  snapshots     BoardSnapshot[]
 
   @@index([ownerId])
   @@index([expiresAt])
@@ -65,42 +109,35 @@ model Board {
 
 /// Join table: who can edit which board, and in what role.
 model BoardCollaborator {
-  boardId      String
-  board        Board            @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  userId       String
-  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   role         CollaboratorRole @default(editor)
   lastActiveAt DateTime         @default(now())
 
   @@id([boardId, userId])
+  /// "My Boards" filters by userId alone. The composite primary key is
+  /// (boardId, userId), whose leading column is boardId — it cannot serve that
+  /// lookup, so without this index every My Boards load is a sequential scan.
+  @@index([userId])
   @@map("board_collaborators")
 }
 
-/// A serialized Yjs document. Written periodically while dirty and on last
-/// disconnect; the newest row rehydrates the in-memory doc on first join.
-/// Retention (keep-latest vs last-N) is an open question — ARCHITECTURE.md.
-model BoardSnapshot {
-  id        String   @id @default(cuid())
-  boardId   String
-  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+/// The serialized Yjs document — exactly one row per board, overwritten in
+/// place (ROADMAP.md Phase 0: keep-latest, not last-N).
+///
+/// Deliberately its own table rather than a column on `boards`: this blob grows
+/// to megabytes, and the three hot reads (My Boards, board lookup, the expiry
+/// sweep) must never drag it off disk. Rehydration is then a single
+/// primary-key fetch rather than an index scan over a growing history.
+model BoardDoc {
+  boardId String @id
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
   docState  Bytes
-  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([boardId, createdAt])
-  @@map("board_snapshots")
-}
-
-/// Short-lived one-time codes for email sign-in. Not linked to User — the row
-/// may not exist until a code is verified. Codes are stored hashed, never plain.
-model LoginCode {
-  id         String    @id @default(cuid())
-  email      String
-  codeHash   String
-  expiresAt  DateTime
-  consumedAt DateTime?
-  attempts   Int       @default(0)
-  createdAt  DateTime  @default(now())
-
-  @@index([email, createdAt])
-  @@map("login_codes")
+  @@map("board_docs")
 }

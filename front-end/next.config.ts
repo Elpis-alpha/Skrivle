@@ -6,13 +6,21 @@ initOpenNextCloudflareForDev();
 
 const nextConfig: NextConfig = {
   images: {
-    // The dev photos on /about and the landing page live on the author's
-    // Cloudinary account; transforms (f_auto,q_auto,w_*) are applied in the URL.
+    // Two different Cloudinary clouds, on purpose.
     remotePatterns: [
       {
+        // The dev photos on /about and the landing page live on the author's
+        // personal account; transforms (f_auto,q_auto,w_*) are applied in the URL.
         protocol: "https",
         hostname: "res.cloudinary.com",
         pathname: "/elpis-cloud/**",
+      },
+      {
+        // Skrivle's own account: board thumbnails and uploaded avatars, written
+        // by the back-end's signed direct uploads (back-end/src/media/cloudinary.ts).
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        pathname: "/lbsvdx2r/**",
       },
     ],
   },

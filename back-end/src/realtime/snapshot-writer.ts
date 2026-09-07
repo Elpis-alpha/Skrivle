@@ -1,37 +1,69 @@
 // Snapshot persistence — docs/ARCHITECTURE.md#persistence-snapshots-not-rows.
 //
-// Serialize a board's in-memory Y.Doc to a binary blob and write it to
-// board_snapshots: periodically (~30s while dirty) and on last-user-disconnect.
-// The newest row rehydrates the doc on first join.
+// A board's live canvas is a Y.Doc in memory. This module is the only thing
+// that makes it durable: periodically while dirty, on last-user-disconnect,
+// and on shutdown.
 //
-// Retention (keep-latest vs last-N) is an open question — ARCHITECTURE.md
-// "Open questions". The skeleton assumes keep-latest; confirm before Phase 1.
+// Retention is keep-latest — one row per board, overwritten in place (settled
+// in ROADMAP.md Phase 0). A Yjs update encodes the whole document history, so
+// the newest blob is self-sufficient; keeping older ones would buy recovery
+// from a corrupt write at the cost of an ever-growing table and an index scan
+// on every rehydrate.
+import { saveDocState } from "./board-store.js";
+import { clearDirty, dirtyBoardIds, peekDoc } from "./doc-manager.js";
 
 export const SNAPSHOT_INTERVAL_MS = 30_000;
 
+let timer: NodeJS.Timeout | null = null;
+
 /** Start the periodic sweep that persists dirty docs. */
 export function startSnapshotWriter(): void {
-  // TODO(Phase 1): setInterval every SNAPSHOT_INTERVAL_MS; for each id from
-  // doc-manager.dirtyBoardIds(), persist(id) then clear the dirty flag.
-  console.log(
-    `[skrivle] snapshot writer registered (stub) — interval ${SNAPSHOT_INTERVAL_MS}ms`,
-  );
+  if (timer) return;
+  timer = setInterval(() => {
+    void flushDirty();
+  }, SNAPSHOT_INTERVAL_MS);
+  // The interval must not hold the process open on its own.
+  timer.unref();
+  console.log(`[skrivle] snapshot writer running every ${SNAPSHOT_INTERVAL_MS}ms`);
+}
+
+/**
+ * Stop the sweep and flush whatever is still dirty. Called on shutdown, where
+ * this is the last chance to save in-flight work.
+ */
+export async function stopSnapshotWriter(): Promise<void> {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+  await flushDirty();
+}
+
+/** Persist every board with unsaved changes. Never throws. */
+export async function flushDirty(): Promise<void> {
+  const ids = dirtyBoardIds();
+  if (ids.length === 0) return;
+
+  const results = await Promise.allSettled(ids.map((id) => persistSnapshot(id)));
+  const failed = results.filter((r) => r.status === "rejected");
+  for (const failure of failed) {
+    console.error("[skrivle] snapshot failed:", (failure as PromiseRejectedResult).reason);
+  }
+  if (failed.length > 0) {
+    console.error(`[skrivle] snapshot flush: ${failed.length}/${ids.length} boards failed`);
+  }
 }
 
 /**
  * Persist one board's current doc state.
- * TODO(Phase 1): Y.encodeStateAsUpdate(getDoc(boardId)) -> prisma.boardSnapshot.create.
+ *
+ * The dirty flag is cleared only after the write lands, so a failed write
+ * leaves the board queued for the next sweep rather than silently dropping it.
  */
-export async function persistSnapshot(_boardId: string): Promise<void> {
-  throw new Error("snapshot-writer.persistSnapshot is not implemented yet (Phase 1).");
-}
+export async function persistSnapshot(boardId: string): Promise<void> {
+  const doc = peekDoc(boardId);
+  if (!doc) return;
 
-/**
- * Load the newest snapshot for a board, or null if it has none.
- * TODO(Phase 1): prisma.boardSnapshot.findFirst({ where: { boardId }, orderBy: { createdAt: "desc" } }).
- */
-export async function loadLatestSnapshot(
-  _boardId: string,
-): Promise<Uint8Array | null> {
-  return null;
+  await saveDocState(boardId, doc);
+  clearDirty(boardId);
 }

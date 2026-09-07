@@ -14,16 +14,21 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "db:test:setup": "createdb skrivle_test 2>/dev/null; TEST_DATABASE_URL=${TEST_DATABASE_URL:-$(sed -n 's/^DATABASE_URL=//p' .env | sed 's#/skrivle?#/skrivle_test?#')} sh -c 'DATABASE_URL=$TEST_DATABASE_URL prisma migrate deploy'"
   },
   "dependencies": {
     "@prisma/client": "^6.7.0",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "nodemailer": "^10.0.0",
+    "redis": "^6.2.1",
     "socket.io": "^4.8.1",
     "y-protocols": "^1.0.6",
-    "yjs": "^13.6.27"
+    "yjs": "^13.6.27",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@eslint/js": "^9",
@@ -31,8 +36,12 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^24.13.3",
+    "@types/nodemailer": "^8.0.1",
+    "@types/supertest": "^7.2.1",
     "eslint": "^9",
     "prisma": "^6.7.0",
+    "socket.io-client": "^4.8.3",
+    "supertest": "^7.2.2",
     "tsx": "^4.20.0",
     "typescript": "^5",
     "typescript-eslint": "^8.20.0",

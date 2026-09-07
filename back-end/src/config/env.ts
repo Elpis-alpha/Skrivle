@@ -1,4 +1,15 @@
 // Typed view of the process environment. See back-end/.env.example.
+import { randomBytes } from "node:crypto";
+
+// Node loads no .env of its own, and `tsx watch` cannot take --env-file via
+// NODE_OPTIONS. process.loadEnvFile() (Node 20.12+) covers tsx, node, and
+// Vitest alike without a dotenv dependency. Real environments (Docker, the
+// host) set variables directly and have no file — hence the guard.
+try {
+  process.loadEnvFile();
+} catch {
+  /* no .env on disk; the environment is expected to be populated already */
+}
 
 const nodeEnv = process.env.NODE_ENV ?? "development";
 const isProduction = nodeEnv === "production";
@@ -20,13 +31,66 @@ function required(name: string): string {
   return value;
 }
 
+/**
+ * A secret that must never silently be the empty string, because "" would make
+ * every HMAC in auth/hash.ts unkeyed. Production still fails loudly; development
+ * falls back to a value that changes each boot, so sessions simply do not
+ * survive a restart — visibly broken beats quietly insecure.
+ */
+function requiredSecret(name: string): string {
+  const value = process.env[name];
+  if (value === undefined || value === "" || value === "change-me") {
+    if (isProduction) {
+      throw new Error(
+        `Missing required environment variable ${name}. Generate one with: openssl rand -hex 32`,
+      );
+    }
+    console.warn(
+      `[skrivle] ${name} is unset — using a random per-boot value. Sessions will not survive a restart.`,
+    );
+    return randomBytes(32).toString("hex");
+  }
+  return value;
+}
+
+function port(): number {
+  const raw = process.env.PORT ?? "4000";
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) {
+    throw new Error(`PORT must be an integer between 1 and 65535; got "${raw}".`);
+  }
+  return parsed;
+}
+
+/** Trailing slashes break origin comparisons and redirect_uri equality. */
+function trimSlash(url: string): string {
+  return url.replace(/\/+$/, "");
+}
+
+const apiPublicUrl = trimSlash(
+  process.env.API_PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 4000}`,
+);
+
 export const config = {
   nodeEnv,
   isProduction,
-  port: Number(process.env.PORT ?? 4000),
+  port: port(),
   databaseUrl: required("DATABASE_URL"),
-  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:3000",
-  sessionSecret: required("SESSION_SECRET"),
+  redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
+
+  /** Allowed browser origins for CORS and the Socket.IO handshake. */
+  corsOrigins: (process.env.CORS_ORIGIN ?? "http://localhost:3000")
+    .split(",")
+    .map((origin) => trimSlash(origin.trim()))
+    .filter(Boolean),
+  /** Where OAuth sends the browser once a session exists. */
+  frontendUrl: trimSlash(process.env.FRONTEND_URL ?? "http://localhost:3000"),
+  /** This server's public base URL — the OAuth redirect_uri is built from it. */
+  apiPublicUrl,
+
+  /** HMAC pepper for session ids, sign-in codes, and creator tokens. */
+  sessionSecret: requiredSecret("SESSION_SECRET"),
+
   oauth: {
     github: {
       clientId: process.env.GITHUB_CLIENT_ID ?? "",
@@ -36,11 +100,35 @@ export const config = {
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
     },
+    /** Must match what is registered with the provider, character for character. */
+    redirectUri(provider: "github" | "google"): string {
+      return `${apiPublicUrl}/api/auth/callback/${provider}`;
+    },
   },
-  email: {
-    /** From-address for one-time-code messages. */
-    from: process.env.EMAIL_FROM ?? "",
-    /** SMTP connection string for the code sender (Phase 1 — provider TBD). */
-    smtpUrl: process.env.SMTP_URL ?? "",
+
+  /** Gmail OAuth2 credentials for nodemailer. See .env.example for the 7-day caveat. */
+  mail: {
+    clientId: process.env.MAIL_CLIENT_ID ?? "",
+    clientSecret: process.env.MAIL_CLIENT_SECRET ?? "",
+    redirectUri: process.env.MAIL_REDIRECT_URI ?? "https://developers.google.com/oauthplayground",
+    refreshToken: process.env.MAIL_REFRESH_TOKEN ?? "",
+    address: process.env.MAIL_ADDRESS ?? "",
   },
+
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME ?? "",
+    apiKey: process.env.CLOUDINARY_API_KEY ?? "",
+    apiSecret: process.env.CLOUDINARY_API_SECRET ?? "",
+    folder: process.env.CLOUDINARY_FOLDER ?? "skrivle",
+  },
+} as const;
+
+/** True when a subsystem has enough configuration to actually be used. */
+export const featureEnabled = {
+  mail: Boolean(config.mail.clientId && config.mail.refreshToken && config.mail.address),
+  github: Boolean(config.oauth.github.clientId && config.oauth.github.clientSecret),
+  google: Boolean(config.oauth.google.clientId && config.oauth.google.clientSecret),
+  cloudinary: Boolean(
+    config.cloudinary.cloudName && config.cloudinary.apiKey && config.cloudinary.apiSecret,
+  ),
 } as const;
