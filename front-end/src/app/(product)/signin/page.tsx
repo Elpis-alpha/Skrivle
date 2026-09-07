@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { PageShell } from "@/components/site/PageShell";
 
@@ -10,7 +11,6 @@ export const metadata: Metadata = {
 };
 
 // STYLE_GUIDE.md §10.14 — email first, then GitHub / Google. No passwords.
-// The form is a client component; nothing is wired to the back-end yet.
 export default function SignInPage() {
   return (
     <PageShell>
@@ -19,7 +19,13 @@ export default function SignInPage() {
         Your boards will be saved to your account.
       </p>
 
-      <SignInForm />
+      {/* This page is statically prerendered and the form reads search params
+          (?next, ?claim, ?error), so the boundary isn't optional — without it
+          the production build fails. `next dev` renders on demand and won't
+          warn you. */}
+      <Suspense fallback={<FormSkeleton />}>
+        <SignInForm />
+      </Suspense>
 
       <p className="mt-6 border-t border-border pt-6 text-base text-ink-secondary">
         You don&apos;t need an account to draw.{" "}
@@ -32,5 +38,14 @@ export default function SignInPage() {
         .
       </p>
     </PageShell>
+  );
+}
+
+function FormSkeleton() {
+  return (
+    <div className="mt-6 flex flex-col gap-4" aria-hidden>
+      <div className="h-[74px] animate-pulse rounded-md bg-wg-100" />
+      <div className="h-10 animate-pulse rounded-md bg-wg-100" />
+    </div>
   );
 }

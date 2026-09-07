@@ -55,9 +55,24 @@ board REST, the Socket.IO↔Yjs bridge with snapshot persistence, Cloudinary
 signed uploads, and the expiry sweep. It is not yet deployed. See
 `back-end/README.md` for the API surface and the decisions behind it.
 
-**The canvas client is the remaining v1 work.** `/board/:id` is still a
-placeholder route, and board ids are still minted client-side even though
-`POST /api/boards` exists — see the `PLACEHOLDER` note in
-`front-end/src/lib/board-id.ts`, mirrored in `back-end/src/boards/board-id.ts`.
-The front-end has no API client or `socket.io-client` yet. See
-[docs/ROADMAP.md](docs/ROADMAP.md).
+The two tiers are **wired together**. The front-end has a REST client
+(`front-end/src/lib/api/`), a Yjs + Socket.IO session (`src/lib/realtime/`),
+real sign-in (emailed code, GitHub, Google), server-minted board ids, guest
+board claiming and extension, `/boards`, and live presence cursors. End-to-end
+tests start a real back-end and cover sign-in and two-tab cursor sync.
+
+**The drawing tools are the remaining v1 work** — pan/zoom and the six tools.
+The Yjs document and its transport are already live, so a tool reads and writes
+the root types in `front-end/src/lib/realtime/doc-schema.ts` and nothing else.
+Board thumbnails are also still owed. See [docs/ROADMAP.md](docs/ROADMAP.md).
+
+Two things worth knowing before touching this seam:
+
+- The API types in `front-end/src/lib/api/types.ts` mirror
+  `back-end/openapi.yaml` **by hand** (no codegen, no cross-folder imports), as
+  do `src/lib/realtime/events.ts` and `src/lib/presence-colors.ts`. Change one
+  side, change the other.
+- Board data is fetched client-side on purpose. The session cookie is host-only
+  on the API origin, so a Worker rendering `/board/:id` can't see it. In local
+  dev it *would* be readable — same host, different port — which is exactly why
+  the mistake survives testing and breaks after deploy.

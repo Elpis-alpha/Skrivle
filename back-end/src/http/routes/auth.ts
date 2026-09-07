@@ -21,7 +21,7 @@ import {
   sessionIdFrom,
   setSessionCookie,
 } from "../../auth/session.js";
-import { config, featureEnabled } from "../../config/env.js";
+import { config, devSignInCodes, featureEnabled } from "../../config/env.js";
 import { signInCodeEmail } from "../../mail/templates.js";
 import { sendMail } from "../../mail/transport.js";
 import { consume, limitByIp, RULES, tooMany } from "../../redis/rate-limit.js";
@@ -69,7 +69,10 @@ authRouter.post(
 
     const code = await issueCode(email);
     await sendMail(signInCodeEmail(email, code));
-    res.json(ok);
+    // Development only, and only on the path that actually issued a code — the
+    // cooldown branch above still answers with a bare `ok`, which is correct:
+    // no code was minted, so there is none to hand back.
+    res.json(devSignInCodes ? { ...ok, code } : ok);
   },
 );
 

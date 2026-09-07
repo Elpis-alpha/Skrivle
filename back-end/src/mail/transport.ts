@@ -8,7 +8,7 @@
 //      strangers often lands in Promotions or spam.
 // Both are fine for a demo and are the reason config is swappable here.
 import nodemailer, { type Transporter } from "nodemailer";
-import { config, featureEnabled } from "../config/env.js";
+import { config, devSignInCodes, featureEnabled } from "../config/env.js";
 
 let transporter: Transporter | null = null;
 
@@ -42,6 +42,10 @@ export type Mail = {
  * like to learn from a sign-in form.
  */
 export async function sendMail(mail: Mail): Promise<boolean> {
+  // Under AUTH_DEV_CODES the code travels in the response instead, so nothing
+  // should go out even if real credentials happen to be in the environment.
+  if (devSignInCodes) return false;
+
   if (!featureEnabled.mail) {
     // Without this, local development needs live Google credentials just to
     // exercise the sign-in flow.

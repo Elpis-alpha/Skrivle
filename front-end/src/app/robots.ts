@@ -7,8 +7,9 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
       // A board link is the only access control there is — keep them out of
-      // search results.
-      disallow: "/board/",
+      // search results. /boards is someone's own list; it has nothing to
+      // index either.
+      disallow: ["/board/", "/boards"],
     },
     sitemap: `${SITE.url}/sitemap.xml`,
   };

@@ -123,9 +123,35 @@ export const config = {
   },
 } as const;
 
+/**
+ * Test affordance: return sign-in codes in the response instead of mailing
+ * them, so an end-to-end test can sign in without an inbox.
+ *
+ * Ignored in production unconditionally — the `!isProduction` term is not
+ * configurable, so setting AUTH_DEV_CODES on a production deployment does
+ * nothing at all.
+ *
+ * It exists because the obvious alternative doesn't work: sendMail logs the
+ * code only when mail is unconfigured, and in exactly that state
+ * GET /api/auth/me reports methods.email === false, which is what the sign-in
+ * UI uses to decide whether to offer the email path at all.
+ */
+export const devSignInCodes = !isProduction && process.env.AUTH_DEV_CODES === "1";
+
+if (devSignInCodes) {
+  console.warn(
+    "[skrivle] AUTH_DEV_CODES is on: sign-in codes are returned in the API " +
+      "response and no mail is sent. Never use this outside development.",
+  );
+}
+
 /** True when a subsystem has enough configuration to actually be used. */
 export const featureEnabled = {
-  mail: Boolean(config.mail.clientId && config.mail.refreshToken && config.mail.address),
+  // devSignInCodes keeps the email path advertised even with no mail
+  // credentials — otherwise the UI hides the very flow under test.
+  mail:
+    devSignInCodes ||
+    Boolean(config.mail.clientId && config.mail.refreshToken && config.mail.address),
   github: Boolean(config.oauth.github.clientId && config.oauth.github.clientSecret),
   google: Boolean(config.oauth.google.clientId && config.oauth.google.clientSecret),
   cloudinary: Boolean(

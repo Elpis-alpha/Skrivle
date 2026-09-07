@@ -127,9 +127,8 @@ refuses to run if the database name does not contain `skrivle_test`.
 
 ## Still to build
 
-- **Canvas client:** the front-end half of the realtime protocol, plus the
-  thumbnail render-and-upload cadence.
-- **Front-end wiring:** an API base-URL env var, replacing the client-side
-  `generateBoardId` with the create-board call, and the My Boards UI.
+- **Drawing tools:** the front-end half of the realtime protocol is built and
+  synced (`front-end/src/lib/realtime/`); the tools that write into the
+  document are not, nor is the thumbnail render-and-upload cadence.
 - **Ops:** Nginx (TLS + reverse proxy for `/api` and `/socket.io`) and the
   deploy pipeline for `api.skrivle.elpis.cc`.
