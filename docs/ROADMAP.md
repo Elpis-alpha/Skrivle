@@ -5,7 +5,7 @@
 - [x] Repo structure, license, editorconfig
 - [x] Project brief + architecture notes
 - [x] Style guide / design system
-- [ ] Decide snapshot retention + scale-out stance (scaffold assumes keep-latest + single-process — confirm)
+- [x] Decide snapshot retention + scale-out stance (keep-latest, single-process — see ARCHITECTURE.md "Decisions")
 - [x] Scaffold `back-end` (Express + Socket.IO + Yjs, Prisma/Postgres) — pure skeleton, subsystems stubbed
 - [x] Scaffold `front-end` (Next.js + Tailwind)
 - [x] Landing page + marketing surface (`/`, about, privacy, faq, contact, terms)
@@ -17,17 +17,19 @@
 
 Goal: the four success criteria in [PROJECT_BRIEF.md](../PROJECT_BRIEF.md) are met.
 
-- [ ] Create board → redirect to `/board/:id` (default 5-char id, optional custom id)
+- [ ] Create board → redirect to `/board/:id` (API done; front-end still mints ids client-side)
 - [ ] Canvas with pan/zoom
+- [x] Board REST: create, lookup, availability, rename, delete, extend, claim
+- [x] Cloudinary: signed uploads for board thumbnails and avatars
 - [ ] Tools: sticky note, text box, rectangle, circle, line/arrow, freehand pen
-- [ ] Yjs doc per board, Socket.IO relay, client replica
+- [x] Yjs doc per board, Socket.IO relay (client replica lands with the canvas)
 - [ ] Live cursors via Yjs awareness (name + color)
-- [ ] Snapshot persistence (interval + last-disconnect) and rehydrate on load
-- [ ] Guest boards ephemeral (24h) + creator extend (+48h)
-- [ ] OAuth sign-in (GitHub + Google)
-- [ ] Claim guest board on sign-in; "My Boards" list
-- [ ] Roles: owner / editor
-- [ ] Expiry sweep job
+- [x] Snapshot persistence (interval + last-disconnect + shutdown) and rehydrate on load
+- [x] Guest boards ephemeral (24h) + creator extend (+48h)
+- [x] Sign-in: emailed one-time code, GitHub, and Google (three methods, one account)
+- [x] Claim guest board on sign-in; "My Boards" list (API; the UI lands with the canvas)
+- [x] Roles: owner / editor
+- [x] Expiry sweep job
 - [x] `coming-soon` page + deployment
 - [ ] Public demo URL (front-end shell is live at `skrivle.elpis.cc`; not "done" until the canvas ships)
 
