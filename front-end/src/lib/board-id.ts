@@ -6,7 +6,16 @@
 // immutable afterwards.
 
 /** A custom id: alphanumeric plus hyphens, 3–32 characters. */
-const ID_PATTERN = /^[a-zA-Z0-9-]{3,32}$/;
+export const ID_PATTERN = /^[a-zA-Z0-9-]{3,32}$/;
+
+/**
+ * Whether a user-chosen custom id is well-formed. Mirrors
+ * back-end/src/boards/board-id.ts#isValidCustomId — uniqueness is a separate
+ * check against the API (GET /api/boards/:id/available).
+ */
+export function isValidCustomId(id: string): boolean {
+  return ID_PATTERN.test(id.trim());
+}
 
 export type ParseResult =
   | { ok: true; id: string }

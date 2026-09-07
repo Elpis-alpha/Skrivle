@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { claimBoard, createBoard, deleteBoard, extendBoard, getBoard, listBoards, renameBoard } from "./boards";
+import {
+  checkBoardIdAvailable,
+  claimBoard,
+  createBoard,
+  deleteBoard,
+  extendBoard,
+  getBoard,
+  listBoards,
+  renameBoard,
+} from "./boards";
 
 type FetchInit = { method?: string; body?: string };
 
@@ -93,5 +102,14 @@ describe("board endpoints", () => {
     await deleteBoard("k3m9p");
     expect(call(spy)).toMatchObject({ path: "/api/boards/k3m9p", method: "DELETE" });
     expect(call(spy).body).toBeUndefined();
+  });
+
+  it("checks id availability with a GET", async () => {
+    const spy = stub();
+    await checkBoardIdAvailable("sprint-42");
+    expect(call(spy)).toMatchObject({
+      path: "/api/boards/sprint-42/available",
+      method: "GET",
+    });
   });
 });

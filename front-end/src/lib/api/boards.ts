@@ -37,6 +37,20 @@ export function listBoards(
   return apiFetch("/api/boards", { ...(signal ? { signal } : {}) });
 }
 
+/**
+ * Well-formedness *and* uniqueness for a candidate custom id — used to check
+ * an id on blur before create is even attempted (STYLE_GUIDE §10.4).
+ * Rate-limited at 60/min, so callers must debounce and never call per keystroke.
+ */
+export function checkBoardIdAvailable(
+  id: string,
+  signal?: AbortSignal,
+): Promise<{ available: boolean }> {
+  return apiFetch(`/api/boards/${encodeURIComponent(id)}/available`, {
+    ...(signal ? { signal } : {}),
+  });
+}
+
 /** Needs no session — the creatorToken is the authority. Sets expiry to now + 48h. */
 export function extendBoard(
   id: string,
