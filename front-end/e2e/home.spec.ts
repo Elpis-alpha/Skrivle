@@ -13,10 +13,11 @@ test.describe("landing page", () => {
 
   test("New board creates a board and goes to it", async ({ page }) => {
     await page.getByRole("button", { name: "New board" }).first().click();
+    // The id is minted by the API now, from the same no-vowel alphabet.
     await expect(page).toHaveURL(/\/board\/[a-z0-9]{5}$/);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "canvas isn't built yet",
-    );
+    await expect(page.getByTestId("board-canvas")).toBeVisible();
+    // Joined and hydrated: our own presence is on the board.
+    await expect(page.getByTestId("presence-avatar")).toHaveCount(1);
   });
 
   test("joining with a pasted link goes to that board", async ({ page }) => {
@@ -25,12 +26,20 @@ test.describe("landing page", () => {
       .fill("https://skrivle.elpis.cc/board/sprint-42");
     await page.getByRole("button", { name: "Join" }).click();
     await expect(page).toHaveURL(/\/board\/sprint-42$/);
+    // The form still doesn't check existence, so a link to a board nobody has
+    // made lands on the offer to create it.
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      "doesn't exist yet",
+    );
   });
 
   test("joining with a bare id goes to that board", async ({ page }) => {
     await page.getByLabel("Already have a link?").fill("k3m9p");
     await page.getByRole("button", { name: "Join" }).click();
     await expect(page).toHaveURL(/\/board\/k3m9p$/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      "doesn't exist yet",
+    );
   });
 
   test("a bad board id is rejected in place, naming the fix", async ({ page }) => {

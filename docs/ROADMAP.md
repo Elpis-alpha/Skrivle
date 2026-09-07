@@ -17,17 +17,17 @@
 
 Goal: the four success criteria in [PROJECT_BRIEF.md](../PROJECT_BRIEF.md) are met.
 
-- [ ] Create board → redirect to `/board/:id` (API done; front-end still mints ids client-side)
-- [ ] Canvas with pan/zoom
+- [x] Create board → redirect to `/board/:id`
+- [ ] Canvas with pan/zoom (the doc and transport are live; tools plug into them)
 - [x] Board REST: create, lookup, availability, rename, delete, extend, claim
 - [x] Cloudinary: signed uploads for board thumbnails and avatars
 - [ ] Tools: sticky note, text box, rectangle, circle, line/arrow, freehand pen
-- [x] Yjs doc per board, Socket.IO relay (client replica lands with the canvas)
-- [ ] Live cursors via Yjs awareness (name + color)
+- [x] Yjs doc per board, Socket.IO relay, and the client replica
+- [x] Live cursors via Yjs awareness (name + color)
 - [x] Snapshot persistence (interval + last-disconnect + shutdown) and rehydrate on load
 - [x] Guest boards ephemeral (24h) + creator extend (+48h)
 - [x] Sign-in: emailed one-time code, GitHub, and Google (three methods, one account)
-- [x] Claim guest board on sign-in; "My Boards" list (API; the UI lands with the canvas)
+- [x] Claim guest board on sign-in; "My Boards" list
 - [x] Roles: owner / editor
 - [x] Expiry sweep job
 - [x] `coming-soon` page + deployment

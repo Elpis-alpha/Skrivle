@@ -1,0 +1,72 @@
+// Board endpoints. back-end/src/http/routes/boards.ts
+
+import { apiFetch } from "./fetch";
+import type { Board, BoardSummary, BoardWithRole, CreatedBoard } from "./types";
+
+/**
+ * Signed out: an ephemeral board expiring in 24h, with a one-time creatorToken.
+ * Signed in: a permanent board owned by you, creatorToken null.
+ *
+ * @throws ApiError 409 when a custom id is taken, 400 when it's malformed.
+ */
+export function createBoard(
+  options: { customId?: string; title?: string } = {},
+): Promise<CreatedBoard> {
+  return apiFetch<CreatedBoard>("/api/boards", {
+    method: "POST",
+    body: options,
+  });
+}
+
+/**
+ * @throws ApiError 404 when the board never existed, 410 when it existed and
+ * expired. The two are distinct states with distinct screens (§10.21).
+ */
+export function getBoard(
+  id: string,
+  signal?: AbortSignal,
+): Promise<BoardWithRole> {
+  return apiFetch<BoardWithRole>(`/api/boards/${encodeURIComponent(id)}`, {
+    ...(signal ? { signal } : {}),
+  });
+}
+
+export function listBoards(
+  signal?: AbortSignal,
+): Promise<{ boards: BoardSummary[] }> {
+  return apiFetch("/api/boards", { ...(signal ? { signal } : {}) });
+}
+
+/** Needs no session — the creatorToken is the authority. Sets expiry to now + 48h. */
+export function extendBoard(
+  id: string,
+  creatorToken: string,
+): Promise<{ expiresAt: string }> {
+  return apiFetch(`/api/boards/${encodeURIComponent(id)}/extend`, {
+    method: "POST",
+    body: { creatorToken },
+  });
+}
+
+/** Needs both a session and the creatorToken. */
+export function claimBoard(id: string, creatorToken: string): Promise<Board> {
+  return apiFetch<Board>(`/api/boards/${encodeURIComponent(id)}/claim`, {
+    method: "POST",
+    body: { creatorToken },
+  });
+}
+
+/** Owner only. */
+export function renameBoard(id: string, title: string): Promise<Board> {
+  return apiFetch<Board>(`/api/boards/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: { title },
+  });
+}
+
+/** Owner only. */
+export function deleteBoard(id: string): Promise<void> {
+  return apiFetch<void>(`/api/boards/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}

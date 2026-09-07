@@ -8,6 +8,7 @@
 // the finished frame.
 
 import { motion, useReducedMotion } from "motion/react";
+import { CursorArrow } from "@/components/board/CursorArrow";
 import { CURSOR_COLORS, NOTE_COLORS } from "@/lib/presence-colors";
 
 const note = (name: string) => NOTE_COLORS.find((n) => n.name === name)!;
@@ -18,29 +19,6 @@ const BUTTER = note("butter");
 const SKY = note("sky");
 const CORAL = cursor("coral");
 const TEAL = cursor("teal");
-
-/** §10.10 — arrow with a 1.5px surface outline so any hue reads on any ground. */
-function Cursor({ color, name }: { color: (typeof CURSOR_COLORS)[number]; name: string }) {
-  return (
-    <div className="flex items-start">
-      <svg width="18" height="20" viewBox="0 0 18 20" aria-hidden="true" focusable="false">
-        <path
-          d="M2 1.5 15.5 11 9 11.8 5.8 17.8Z"
-          fill={color.base}
-          stroke="var(--surface)"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <span
-        className="mt-1 -ml-0.5 rounded-pill px-1.5 py-0.5 text-2xs font-medium text-white"
-        style={{ backgroundColor: color.label }}
-      >
-        {name}
-      </span>
-    </div>
-  );
-}
 
 function Note({
   color,
@@ -197,7 +175,7 @@ export function BoardMock() {
             reduced ? undefined : { duration: 9, repeat: Infinity, ease: "easeInOut" }
           }
         >
-          <Cursor color={CORAL} name="Maya" />
+          <CursorArrow color={CORAL} name="Maya" />
         </motion.div>
 
         <motion.div
@@ -209,7 +187,7 @@ export function BoardMock() {
               : { duration: 11, repeat: Infinity, ease: "easeInOut", delay: 0.8 }
           }
         >
-          <Cursor color={TEAL} name="Ben" />
+          <CursorArrow color={TEAL} name="Ben" />
         </motion.div>
       </div>
     </div>

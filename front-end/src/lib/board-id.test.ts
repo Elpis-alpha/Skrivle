@@ -1,21 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateBoardId, parseBoardRef } from "./board-id";
-
-describe("generateBoardId", () => {
-  it("returns five characters by default", () => {
-    expect(generateBoardId()).toHaveLength(5);
-  });
-
-  it("only uses unambiguous alphanumerics", () => {
-    for (let i = 0; i < 200; i++) {
-      expect(generateBoardId()).toMatch(/^[bcdfghjkmnpqrstvwxyz23456789]{5}$/);
-    }
-  });
-
-  it("honours a requested length", () => {
-    expect(generateBoardId(12)).toHaveLength(12);
-  });
-});
+import { parseBoardRef } from "./board-id";
 
 describe("parseBoardRef", () => {
   it("accepts a bare id", () => {
