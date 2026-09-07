@@ -4,11 +4,13 @@
 // step; below an "or" divider, the two OAuth providers. Nothing is wired to the
 // back-end yet (see back-end/src/http/routes/auth.ts).
 
+import { OTPInput, REGEXP_ONLY_DIGITS, type SlotProps } from "input-otp";
 import { useId, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 
 type Step = "email" | "code";
 
+const CODE_LENGTH = 6;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const FIELD_BASE =
@@ -87,26 +89,39 @@ export function SignInForm() {
           <label htmlFor={codeId} className="text-sm font-medium text-ink">
             Enter the code we emailed to {email}
           </label>
-          <input
+          <OTPInput
             id={codeId}
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={6}
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            placeholder="123456"
+            onChange={setCode}
+            maxLength={CODE_LENGTH}
+            pattern={REGEXP_ONLY_DIGITS}
             autoComplete="one-time-code"
-            className={
-              FIELD_BASE +
-              " border-border tracking-[0.3em] placeholder:tracking-normal focus:border-accent"
-            }
+            aria-label="One-time code"
+            aria-describedby={`${codeId}-hint`}
+            containerClassName="mt-2 flex items-center gap-2"
+            render={({ slots }) => (
+              <>
+                {slots.map((slot, i) => (
+                  <CodeSlot key={i} {...slot} />
+                ))}
+              </>
+            )}
           />
+          <p id={`${codeId}-hint`} className="mt-2 text-xs text-ink-muted">
+            Six digits, from the email. Didn&apos;t get it?{" "}
+            <button
+              type="button"
+              className="rounded-sm underline decoration-border underline-offset-4 hover:decoration-accent focus-visible:focus-ring"
+            >
+              Resend code
+            </button>
+          </p>
           <Button
             type="submit"
             variant="primary"
             size="md"
             className="mt-3 w-full"
-            disabled
+            disabled={code.length !== CODE_LENGTH}
           >
             Verify and sign in
           </Button>
@@ -143,6 +158,29 @@ export function SignInForm() {
       <p className="text-xs text-ink-muted">
         Sign-in isn&apos;t wired up yet — it arrives with the board itself.
       </p>
+    </div>
+  );
+}
+
+// A single code box. input-otp keeps one real <input> behind the slots and
+// tells us which is active and where the caret sits.
+function CodeSlot({ char, isActive, hasFakeCaret }: SlotProps) {
+  return (
+    <div
+      className={
+        "relative flex h-11 w-10 items-center justify-center rounded-sm border bg-surface " +
+        "text-md tabular-nums text-ink transition-shadow duration-(--dur-fast) ease-standard " +
+        (isActive
+          ? "border-accent shadow-[0_0_0_3px_var(--accent-subtle)]"
+          : "border-border")
+      }
+    >
+      {char}
+      {hasFakeCaret ? (
+        <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <span className="h-5 w-px animate-pulse bg-ink" />
+        </span>
+      ) : null}
     </div>
   );
 }
