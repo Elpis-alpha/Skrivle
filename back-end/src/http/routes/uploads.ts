@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { optionalSession } from "../../auth/middleware.js";
-import { findBoard, isExpired } from "../../boards/service.js";
+import { findBoardLifecycle, isExpired } from "../../boards/service.js";
 import { featureEnabled } from "../../config/env.js";
 import { signUpload } from "../../media/cloudinary.js";
 import { limitByIp, RULES } from "../../redis/rate-limit.js";
@@ -54,7 +54,7 @@ uploadsRouter.post(
 
     // Thumbnails follow the same rule as the canvas: anyone who can open the
     // board can write its thumbnail, because anyone who can open it can edit it.
-    const board = await findBoard(body.boardId);
+    const board = await findBoardLifecycle(body.boardId);
     if (!board || isExpired(board)) {
       res.status(404).json({
         error: {

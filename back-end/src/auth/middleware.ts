@@ -8,12 +8,19 @@ import { readSession, sessionIdFrom } from "./session.js";
 import { prisma } from "../db/prisma.js";
 import type { User } from "@prisma/client";
 
+/**
+ * Only the fields anything actually reads off `req.user` — checked across
+ * every route. Fetching the whole row would run a signed-in user's avatar
+ * blob and internal timestamps through nearly every authenticated request.
+ */
+export type SessionUser = Pick<User, "id" | "email" | "name" | "avatarUrl">;
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       /** The signed-in user, or null for a guest. Set by optionalSession. */
-      user?: User | null;
+      user?: SessionUser | null;
       /** The raw session token, when one was presented. */
       sessionId?: string | undefined;
     }
@@ -30,7 +37,10 @@ export const optionalSession: RequestHandler = async (req, _res, next) => {
   if (record) {
     // The session may outlive the user (account deleted with sessions live),
     // so the row is the authority, not the token.
-    req.user = await prisma.user.findUnique({ where: { id: record.userId } });
+    req.user = await prisma.user.findUnique({
+      where: { id: record.userId },
+      select: { id: true, email: true, name: true, avatarUrl: true },
+    });
   }
   next();
 };

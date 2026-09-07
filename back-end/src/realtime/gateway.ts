@@ -31,7 +31,7 @@ import {
   toBytes,
 } from "./yjs-bridge.js";
 import { readSession, SESSION_COOKIE } from "../auth/session.js";
-import { findBoard, isExpired, touchCollaborator } from "../boards/service.js";
+import { findBoardLifecycle, isExpired, touchCollaborator } from "../boards/service.js";
 import { normalizeBoardId } from "../boards/board-id.js";
 import { config } from "../config/env.js";
 import { prisma } from "../db/prisma.js";
@@ -84,7 +84,7 @@ export function attachGateway(httpServer: HttpServer): IOServer {
       }
       const boardId = normalizeBoardId(rawBoardId);
 
-      const board = await findBoard(boardId);
+      const board = await findBoardLifecycle(boardId);
       if (!board) {
         next(new Error("board_not_found"));
         return;
@@ -96,7 +96,10 @@ export function attachGateway(httpServer: HttpServer): IOServer {
 
       const session = await readSession(sessionCookieFrom(socket));
       const user = session
-        ? await prisma.user.findUnique({ where: { id: session.userId } })
+        ? await prisma.user.findUnique({
+            where: { id: session.userId },
+            select: { id: true, name: true },
+          })
         : null;
 
       const guestName = typeof socket.handshake.auth?.name === "string"
@@ -148,80 +151,94 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
   // Between the await above and here the socket may already be gone.
   if (socket.disconnected) return;
 
-  await socket.join(roomFor(boardId));
-  trackSocket(boardId, socket.id);
+  // acquireDoc succeeded, so the doc is now held open for this socket — from
+  // here on, any throw has to still reach a disconnect (and, via `named`, tell
+  // the client why) rather than becoming an unhandled rejection off the `void
+  // joinBoard(...)` call site above.
+  try {
+    await socket.join(roomFor(boardId));
+    trackSocket(boardId, socket.id);
 
-  const awareness = awarenessFor(boardId, doc);
+    const awareness = awarenessFor(boardId, doc);
 
-  socket.emit(EVENTS.BOARD_JOINED, {
-    boardId,
-    // Assigned server-side: only the server knows the join order, which is what
-    // front-end/src/lib/presence-colors.ts indexes into.
-    color: colorForJoinOrder(own.joinOrder),
-    you: { id: own.userId, name: own.displayName, signedIn: own.userId !== null },
-  });
+    socket.emit(EVENTS.BOARD_JOINED, {
+      boardId,
+      // Assigned server-side: only the server knows the join order, which is
+      // what front-end/src/lib/presence-colors.ts indexes into.
+      color: colorForJoinOrder(own.joinOrder),
+      you: { id: own.userId, name: own.displayName, signedIn: own.userId !== null },
+    });
 
-  sendInitialSync(socket, doc);
+    sendInitialSync(socket, doc);
 
-  // Existing cursors, so a late joiner sees everyone already on the board.
-  const present = encodeAllStates(awareness);
-  if (present) socket.emit(EVENTS.AWARENESS_UPDATE, present);
+    // Existing cursors, so a late joiner sees everyone already on the board.
+    const present = encodeAllStates(awareness);
+    if (present) socket.emit(EVENTS.AWARENESS_UPDATE, present);
 
-  if (own.userId) void touchCollaborator(boardId, own.userId).catch(() => {});
+    if (own.userId) void touchCollaborator(boardId, own.userId).catch(() => {});
 
-  // --- document sync ---
+    // --- document sync ---
 
-  socket.on(EVENTS.SYNC_STEP, (payload: unknown) => {
-    const vector = toBytes(payload);
-    if (!vector) return;
-    sendMissingUpdates(socket, doc, vector);
-  });
+    socket.on(EVENTS.SYNC_STEP, (payload: unknown) => {
+      const vector = toBytes(payload);
+      if (!vector) return;
+      sendMissingUpdates(socket, doc, vector);
+    });
 
-  socket.on(EVENTS.SYNC_UPDATE, (payload: unknown) => {
-    const update = toBytes(payload);
-    if (!update) return;
-    if (!applyClientUpdate(io, boardId, doc, update, socket)) {
-      named(socket, "That change was too large to apply.", "Try again with a smaller selection.");
-    }
-  });
+    socket.on(EVENTS.SYNC_UPDATE, (payload: unknown) => {
+      const update = toBytes(payload);
+      if (!update) return;
+      if (!applyClientUpdate(io, boardId, doc, update, socket)) {
+        named(socket, "That change was too large to apply.", "Try again with a smaller selection.");
+      }
+    });
 
-  // --- awareness (ephemeral, never persisted) ---
+    // --- awareness (ephemeral, never persisted) ---
 
-  socket.on(EVENTS.AWARENESS_UPDATE, (payload: unknown) => {
-    const update = toBytes(payload);
-    if (!update) return;
+    socket.on(EVENTS.AWARENESS_UPDATE, (payload: unknown) => {
+      const update = toBytes(payload);
+      if (!update) return;
 
-    try {
-      const introduced = applyClientAwareness(awareness, update, socket.id);
-      for (const clientId of introduced) own.awarenessClients.add(clientId);
-    } catch {
-      return;
-    }
-    socket.to(roomFor(boardId)).emit(EVENTS.AWARENESS_UPDATE, update);
-  });
+      try {
+        const introduced = applyClientAwareness(awareness, update, socket.id);
+        for (const clientId of introduced) own.awarenessClients.add(clientId);
+      } catch {
+        return;
+      }
+      socket.to(roomFor(boardId)).emit(EVENTS.AWARENESS_UPDATE, update);
+    });
 
-  // Retractions the server itself makes (a peer disconnecting) still have to
-  // reach everyone, so they are broadcast from here rather than relayed.
-  const onAwarenessChange = (
-    { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
-    origin: unknown,
-  ) => {
-    if (origin !== SERVER_ORIGIN) return;
-    const changed = [...added, ...updated, ...removed];
-    if (changed.length === 0) return;
-    io.to(roomFor(boardId)).emit(EVENTS.AWARENESS_UPDATE, encodeStates(awareness, changed));
-  };
-  awareness.on("update", onAwarenessChange);
+    // Retractions the server itself makes (a peer disconnecting) still have to
+    // reach everyone, so they are broadcast from here rather than relayed.
+    const onAwarenessChange = (
+      { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
+      origin: unknown,
+    ) => {
+      if (origin !== SERVER_ORIGIN) return;
+      const changed = [...added, ...updated, ...removed];
+      if (changed.length === 0) return;
+      io.to(roomFor(boardId)).emit(EVENTS.AWARENESS_UPDATE, encodeStates(awareness, changed));
+    };
+    awareness.on("update", onAwarenessChange);
 
-  socket.on("disconnect", () => {
-    awareness.off("update", onAwarenessChange);
-    // The fix for ghost cursors: the server retracts what this socket brought,
-    // whether or not the client managed to say goodbye.
-    retractClients(awareness, [...own.awarenessClients]);
+    socket.on("disconnect", () => {
+      try {
+        awareness.off("update", onAwarenessChange);
+        // The fix for ghost cursors: the server retracts what this socket
+        // brought, whether or not the client managed to say goodbye.
+        retractClients(awareness, [...own.awarenessClients]);
 
-    const roomEmpty = untrackSocket(boardId, socket.id);
-    if (roomEmpty) void releaseBoard(boardId);
-  });
+        const roomEmpty = untrackSocket(boardId, socket.id);
+        if (roomEmpty) void releaseBoard(boardId);
+      } catch (err) {
+        console.error(`[skrivle] disconnect cleanup failed for board ${boardId}:`, err);
+      }
+    });
+  } catch (err) {
+    console.error(`[skrivle] failed to join board ${boardId}:`, err);
+    named(socket, "Something went wrong joining this board.", "Refresh to try again.");
+    socket.disconnect(true);
+  }
 }
 
 /**
@@ -240,10 +257,14 @@ async function releaseBoard(boardId: string): Promise<void> {
     return;
   }
 
-  if (socketCount(boardId) > 0) return;
-  releaseDoc(boardId);
-  releaseAwareness(boardId);
-  joinCounters.delete(boardId);
+  try {
+    if (socketCount(boardId) > 0) return;
+    releaseDoc(boardId);
+    releaseAwareness(boardId);
+    joinCounters.delete(boardId);
+  } catch (err) {
+    console.error(`[skrivle] cleanup after releasing board ${boardId} failed:`, err);
+  }
 }
 
 /** STYLE_GUIDE §10.3 — what happened, and the next step. */

@@ -103,8 +103,14 @@ export class UnverifiedEmailCollision extends Error {
   }
 }
 
-/** The shape sent to the browser. Never leaks internal columns. */
-export function publicUser(user: User) {
+/**
+ * The shape sent to the browser. Never leaks internal columns.
+ *
+ * Takes a `Pick`, not the full `User`, so it also accepts `req.user` — which
+ * is deliberately fetched with the same narrow `select` (see
+ * `auth/middleware.ts`'s `SessionUser`) rather than the whole row.
+ */
+export function publicUser(user: Pick<User, "id" | "email" | "name" | "avatarUrl">) {
   return {
     id: user.id,
     email: user.email,

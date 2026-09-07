@@ -10,6 +10,7 @@ import {
   deleteBoard,
   extendBoard,
   findBoard,
+  findBoardLifecycle,
   InvalidBoardId,
   isAvailable,
   isExpired,
@@ -272,7 +273,7 @@ boardsRouter.post(
   validate(thumbnailSchema),
   async (req, res) => {
     const { publicId } = req.body as z.infer<typeof thumbnailSchema>;
-    const board = await findBoard(boardIdOf(req));
+    const board = await findBoardLifecycle(boardIdOf(req));
 
     if (!board || isExpired(board)) {
       res.status(404).json({
@@ -297,6 +298,7 @@ boardsRouter.post(
     const updated = await prisma.board.update({
       where: { id: board.id },
       data: { thumbnailId: publicId },
+      select: { thumbnailId: true },
     });
     res.json({ thumbnailUrl: thumbnailUrl(updated.thumbnailId) });
   },

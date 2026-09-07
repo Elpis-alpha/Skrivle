@@ -122,7 +122,7 @@ export async function isAvailable(id: string): Promise<boolean> {
   return !(await boardExists(normalized));
 }
 
-export function isExpired(board: Board): boolean {
+export function isExpired(board: Pick<Board, "expiresAt">): boolean {
   return board.expiresAt !== null && board.expiresAt.getTime() <= Date.now();
 }
 
@@ -131,20 +131,40 @@ export async function findBoard(id: string): Promise<Board | null> {
 }
 
 /**
+ * The lean version of {@link findBoard} for callers that only need to know a
+ * board is alive: the Socket.IO handshake and the upload-signing endpoints.
+ * `findBoard` fetches all 10 `Board` columns, including a hashed secret
+ * (`creatorTokenHash`) neither of those call sites reads.
+ */
+export type BoardLifecycle = Pick<Board, "id" | "expiresAt">;
+
+export async function findBoardLifecycle(id: string): Promise<BoardLifecycle | null> {
+  return prisma.board.findUnique({
+    where: { id: normalizeBoardId(id) },
+    select: { id: true, expiresAt: true },
+  });
+}
+
+/**
  * Push an ephemeral board's expiry out, proving the caller created it.
  *
  * Extension is relative to now rather than to the current expiry, so repeated
  * calls cannot stack a guest board into permanence.
  */
-export async function extendBoard(id: string, creatorToken: string): Promise<Board | null> {
+export async function extendBoard(
+  id: string,
+  creatorToken: string,
+): Promise<Pick<Board, "expiresAt"> | null> {
   const board = await findBoard(id);
   if (!board || !board.creatorTokenHash) return null;
   if (!verifyToken(creatorToken, board.creatorTokenHash)) return null;
   if (!board.isEphemeral) return board;
 
+  // The caller (the /extend route) only ever reads expiresAt back.
   return prisma.board.update({
     where: { id: board.id },
     data: { expiresAt: expiryFrom(EXTENSION_HOURS) },
+    select: { expiresAt: true },
   });
 }
 
