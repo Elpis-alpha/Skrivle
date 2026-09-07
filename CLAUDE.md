@@ -23,8 +23,6 @@ without asking. Each folder currently holds only a `.keep`.
 
 ## Conventions
 
-- Commits are made **only** through the `commit` skill (`/commit`) — never a bare
-  `git add` / `git commit`. The skill's subagent review pass is the point.
 - All visual work follows [docs/STYLE_GUIDE.md](docs/STYLE_GUIDE.md): Poppins,
   minimal, purple-tinted ink (not black), full amethyst `#32174D` only for the
   primary action and your own presence. Tokens live in `:root` CSS vars + a
