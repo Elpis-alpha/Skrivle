@@ -5,8 +5,10 @@
 services:
   back-end:
     build: .
+    # Published on the Docker bridge gateway, not 0.0.0.0 — the host's Nginx
+    # reverse-proxies to it and nothing off-box should reach the Node port.
     ports:
-      - "${PORT:-4000}:4000"
+      - "172.17.0.1:5002:4000"
     env_file:
       - .env
     environment:
