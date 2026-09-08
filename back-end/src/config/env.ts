@@ -106,11 +106,10 @@ export const config = {
     },
   },
 
-  /** Gmail OAuth2 credentials for nodemailer. See .env.example for the 7-day caveat. */
+  /** Gmail OAuth2 credentials for the Gmail HTTPS API. See .env.example for the 7-day caveat. */
   mail: {
     clientId: process.env.MAIL_CLIENT_ID ?? "",
     clientSecret: process.env.MAIL_CLIENT_SECRET ?? "",
-    redirectUri: process.env.MAIL_REDIRECT_URI ?? "https://developers.google.com/oauthplayground",
     refreshToken: process.env.MAIL_REFRESH_TOKEN ?? "",
     address: process.env.MAIL_ADDRESS ?? "",
   },

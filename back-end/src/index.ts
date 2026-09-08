@@ -1,8 +1,9 @@
 // Entrypoint. Boots the Skrivle API + realtime gateway.
-import { config } from "./config/env.js";
+import { config, featureEnabled } from "./config/env.js";
 import { prisma } from "./db/prisma.js";
 import { startExpirySweep, stopExpirySweep } from "./jobs/expiry-sweep.js";
 import { installSignalHandlers, onShutdown, shutdown } from "./lifecycle.js";
+import { verifyMailTransport } from "./mail/transport.js";
 import { startSnapshotWriter, stopSnapshotWriter } from "./realtime/snapshot-writer.js";
 import { connectRedis, disconnectRedis } from "./redis/client.js";
 import { createServer } from "./server.js";
@@ -30,6 +31,16 @@ httpServer.listen(config.port, () => {
     `[skrivle] API on http://localhost:${config.port}  ·  env ${config.nodeEnv}`,
   );
   console.log("[skrivle] Socket.IO gateway mounted at /socket.io");
+
+  // Non-blocking: a mail outage must not stop the API from serving. If the
+  // credentials are present but unusable, say so loudly and carry on.
+  if (featureEnabled.mail) {
+    void verifyMailTransport().then((ok) => {
+      if (!ok) {
+        console.warn("[skrivle] mail credentials present but unusable — sign-in email will fail");
+      }
+    });
+  }
 });
 
 httpServer.on("error", (err) => {
