@@ -47,15 +47,17 @@ without asking. Each folder currently holds only a `.keep`.
 
 ## Status
 
-Phase 1. The `front-end` landing page and its static pages are built and
-deployed to Cloudflare Workers at `skrivle.elpis.cc` (OpenNext); the
-`coming-soon` page is live at `soon.skrivle.elpis.cc`.
+Phase 1 is done and deployed. The `front-end` (Cloudflare Workers, OpenNext) is
+live at `skrivle.elpis.cc`; the `back-end` (Docker + Nginx) is live at
+`api.skrivle.elpis.cc`; the `coming-soon` page is live at
+`soon.skrivle.elpis.cc`. Both tiers are up, wired together, and reachable by
+the public — this is a real v1, not a front-end shell in front of a stub.
 
-The `back-end` is **built and tested** — schema + migration, three sign-in
-methods (emailed code, GitHub, Google) with cross-provider account linking,
-board REST, the Socket.IO↔Yjs bridge with snapshot persistence, Cloudinary
-signed uploads, and the expiry sweep. It is not yet deployed. See
-`back-end/README.md` for the API surface and the decisions behind it.
+The `back-end` has schema + migration, three sign-in methods (emailed code,
+GitHub, Google) with cross-provider account linking, board REST, the
+Socket.IO↔Yjs bridge with snapshot persistence, Cloudinary signed uploads, and
+the expiry sweep — all built, tested, and now live. See `back-end/README.md`
+for the API surface and the decisions behind it.
 
 The two tiers are **wired together**. The front-end has a REST client
 (`front-end/src/lib/api/`), a Yjs + Socket.IO session (`src/lib/realtime/`),
@@ -67,7 +69,7 @@ tests start a real back-end and cover sign-in and two-tab cursor sync.
 resize, undo/redo, and client-rendered board thumbnails. The element schema
 lives in `front-end/src/lib/realtime/doc-schema.ts`; every write goes through
 `src/lib/board/elements.ts`, which wraps each gesture in one `doc.transact` under
-the `LOCAL` origin. What remains for v1 is the public demo deploy — see
+the `LOCAL` origin. What's left for the roadmap is Phase 2, the native app — see
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Four things worth knowing before touching this seam:

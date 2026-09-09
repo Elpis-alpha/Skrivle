@@ -64,22 +64,22 @@ export function Hero() {
             on it sees every stroke as it happens.
           </p>
 
-          {/* §13.5 — the canvas isn't live, and the reader learns that here
-              rather than by clicking a button that goes to a placeholder. The
-              chip says "In progress" because that is the word the roadmap uses
-              for this phase; the two now agree. It stays below the h1: above it,
-              it would be an eyebrow label (§13.6). */}
+          {/* §13.5 — states the true, current build status rather than
+              staying silent on it. The chip reuses the success colour
+              RoadmapRail's own "Done" badge uses for this same phase, so the
+              two surfaces read as one fact rather than two claims. It stays
+              below the h1: above it, it would be an eyebrow label (§13.6). */}
           <p className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 text-base text-ink-muted">
-            <span className="inline-flex shrink-0 items-center gap-2 rounded-pill bg-accent-subtle px-3 py-1 text-ink-secondary">
-              <span className="size-2 rounded-pill bg-accent" aria-hidden="true" />
-              In progress
+            <span className="inline-flex shrink-0 items-center gap-2 rounded-pill bg-success-subtle px-3 py-1 text-success">
+              <span className="size-2 rounded-pill bg-success" aria-hidden="true" />
+              Live
             </span>
-            The canvas isn&apos;t live yet.
+            The whole board works — this isn&apos;t a mockup.
             <Link
               href="/#roadmap"
               className="rounded-sm text-ink underline decoration-border underline-offset-4 transition-colors duration-(--dur-fast) ease-standard hover:decoration-accent focus-visible:focus-ring"
             >
-              See what works today
+              See what&apos;s next
             </Link>
           </p>
 

@@ -140,10 +140,10 @@ Hosted under `elpis.cc`, split by tier:
 | --- | --- | --- |
 | `skrivle.elpis.cc` | `front-end/` — **live** | Cloudflare Workers (OpenNext) |
 | `soon.skrivle.elpis.cc` | `coming-soon/` — **live** | Cloudflare |
-| `api.skrivle.elpis.cc` | `back-end/` (`/socket.io` + `/api`) — not yet deployed | Docker Compose + Nginx |
+| `api.skrivle.elpis.cc` | `back-end/` (`/socket.io` + `/api`) — **live** | Docker Compose + Nginx |
 
 - The front-end took the apex and `coming-soon/` moved to `soon.` on 2026-09-06;
-  only the API tier is still pending.
+  the API tier followed, and all three domains are live.
 - Back-end Compose stack: `back-end` + `redis` (Postgres is external; Nginx is
   the VPS host's, not a container). A profile-gated `migrate` service shares the
   image for ad-hoc migration runs.

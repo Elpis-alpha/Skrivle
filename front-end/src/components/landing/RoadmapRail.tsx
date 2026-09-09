@@ -1,5 +1,6 @@
-// Status, stated plainly — §13.5. The board itself isn't built yet and the page
-// says so here rather than letting a visitor find out by clicking.
+// Status, stated plainly — §13.5. Phase 0 and 1 are done and live; Phase 2 (the
+// native app) is what's left, and the page says so here rather than leaving a
+// visitor to guess.
 
 import { Reveal, RevealChild, RevealItem, Stagger } from "@/components/motion/Reveal";
 import type { Variants } from "motion/react";
@@ -21,7 +22,7 @@ const STAGES: Stage[] = [
   {
     phase: "Phase 1",
     title: "The board",
-    state: "building",
+    state: "done",
     items: ["Canvas, tools, pan and zoom", "Live sync and cursors", "Sign-in and My Boards"],
   },
   {
@@ -65,8 +66,8 @@ export function RoadmapRail() {
         <Reveal>
           <h2 className="text-xl text-ink">Where it has got to</h2>
           <p className="mt-3 max-w-measure text-base text-ink-secondary">
-            Skrivle is mid-build. The canvas is not finished yet, so a board you
-            create today opens a placeholder — this is the honest state of it.
+            The web app — board, live sync, sign-in — is done and live. The
+            native app is what&apos;s left; here&apos;s where that stands.
           </p>
         </Reveal>
 

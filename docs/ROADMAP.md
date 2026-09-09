@@ -1,6 +1,6 @@
 # Skrivle — Roadmap
 
-## Phase 0 — Initialization (current)
+## Phase 0 — Initialization
 
 - [x] Repo structure, license, editorconfig
 - [x] Project brief + architecture notes
@@ -9,7 +9,7 @@
 - [x] Scaffold `back-end` (Express + Socket.IO + Yjs, Prisma/Postgres) — pure skeleton, subsystems stubbed
 - [x] Scaffold `front-end` (Next.js + Tailwind)
 - [x] Landing page + marketing surface (`/`, about, privacy, faq, contact, terms)
-- [x] Back-end Docker stack (back-end container only; Postgres external, nginx still TODO)
+- [x] Back-end Docker stack (back-end container + Nginx; Postgres external)
 - [x] Back-end migrations auto-apply on deploy (entrypoint `prisma migrate deploy`)
 - [x] `coming-soon` deployed (Cloudflare, `soon.skrivle.elpis.cc`)
 - [x] `front-end` deployed (Cloudflare Workers / OpenNext, `skrivle.elpis.cc`)
@@ -34,9 +34,11 @@ Goal: the four success criteria in [PROJECT_BRIEF.md](../PROJECT_BRIEF.md) are m
 - [x] Roles: owner / editor
 - [x] Expiry sweep job
 - [x] `coming-soon` page + deployment
-- [ ] Public demo URL (front-end shell is live at `skrivle.elpis.cc`; not "done" until the canvas ships)
+- [x] Public demo URL — `back-end` deployed to `api.skrivle.elpis.cc` (Docker + Nginx); the canvas at `skrivle.elpis.cc` is live end to end
 
 ## Phase 2 — Native app
+
+Not started; no timeline. v1 (Phase 0 + 1) is complete and live.
 
 - [ ] React Native viewer (read-only board rendering)
 - [ ] Light editing (notes, text)

@@ -38,9 +38,10 @@ describe("landing page", () => {
     expect(screen.getByRole("button", { name: "Join" })).toBeInTheDocument();
   });
 
-  it("states the build status rather than implying the canvas ships today", () => {
+  it("states the build status now that the whole app is live", () => {
     render(<Page />);
-    expect(screen.getByText(/the canvas is not finished yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/the whole board works/i)).toBeInTheDocument();
+    expect(screen.getByText(/the native app is what's left/i)).toBeInTheDocument();
   });
 
   it("answers the account question in the FAQ", () => {
