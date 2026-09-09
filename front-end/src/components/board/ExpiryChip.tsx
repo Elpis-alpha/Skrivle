@@ -3,6 +3,7 @@
 // STYLE_GUIDE.md §4.2 — the amber chip a guest board carries in its top bar.
 
 import { useEffect, useState } from "react";
+import { Plus, LogIn } from "lucide-react";
 import { useMounted } from "@/components/motion/useMounted";
 import { extendBoard } from "@/lib/api/boards";
 import { isApiError } from "@/lib/api/errors";
@@ -66,31 +67,52 @@ export function ExpiryChip({
     }
   }
 
+  // Below sm, "Expires in " is dropped: the pill's shape and warning colour
+  // already say "this is a countdown," and the top bar has no width to spare
+  // (see BoardSurface.tsx and the min-w on its title). formatRemaining() stays
+  // untouched — its own tests pin the full copy — this only trims it for
+  // display.
+  const shortLabel = label.replace(/^Expires(?: in)?\s*/, "");
+
   return (
     <span className={CHIP}>
-      <span className="tabular-nums">{label}</span>
+      <span className="tabular-nums">
+        <span className="hidden sm:inline">{label}</span>
+        <span className="sm:hidden">{shortLabel}</span>
+      </span>
       {canExtend ? (
         <>
-          {" · "}
+          {/* Below sm this collapses to an icon: the top bar has no width to
+              spare once a title, an avatar cluster, and "My boards" are all
+              fighting for the same row (see BoardSurface.tsx), and "Extend"
+              spelled out was the easiest 60-90px to give back without hiding
+              anything that isn't reachable another way. */}
+          <span className="hidden sm:inline"> · </span>
           <button
             type="button"
             onClick={() => void extend()}
             disabled={pending}
+            aria-label={pending ? "Extending" : "Extend"}
             className="rounded-sm underline decoration-warning-strong/40 underline-offset-2 hover:decoration-warning-strong focus-visible:focus-ring disabled:no-underline"
           >
-            {pending ? "Extending…" : "Extend"}
+            <Plus size={12} strokeWidth={2} className="sm:hidden" aria-hidden="true" />
+            <span className="hidden sm:inline">{pending ? "Extending…" : "Extend"}</span>
           </button>
         </>
       ) : (
         <>
-          {" · "}
           {/* No creator token in this browser, so Extend would 403. Offer the
-              thing that actually works instead. */}
+              thing that actually works instead — full text on a normal-width
+              screen; below sm this is dropped rather than shrunk, since the
+              header's own Sign-in button already does the same thing. */}
+          <span className="hidden sm:inline"> · </span>
           <a
             href={`/signin?next=/board/${board.id}`}
+            aria-label="Sign in to keep it"
             className="rounded-sm underline decoration-warning-strong/40 underline-offset-2 hover:decoration-warning-strong focus-visible:focus-ring"
           >
-            Sign in to keep it
+            <LogIn size={12} strokeWidth={2} className="sm:hidden" aria-hidden="true" />
+            <span className="hidden sm:inline">Sign in to keep it</span>
           </a>
         </>
       )}

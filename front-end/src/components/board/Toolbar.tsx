@@ -75,8 +75,16 @@ export function Toolbar({
       role={readOnly ? undefined : "toolbar"}
       aria-label={readOnly ? undefined : "Drawing tools"}
       aria-orientation="horizontal"
+      // rounded-pill (999px) on a single row reads as a capsule; on a row this
+      // narrow the tools don't all fit and the pill wraps to two rows (or more
+      // for the labelled readOnly copy), and that same 999px radius on a much
+      // taller box looks like an oversized, lopsided blob rather than rounded
+      // corners. 480px is reused rather than measured — it's the width this
+      // component already collapses around — so a labelled copy that's still
+      // wrapped just past it would keep the fully-rounded corners; narrow it
+      // further here if that turns out to matter in practice.
       className={
-        "flex flex-wrap items-center gap-1 rounded-pill border border-border bg-surface p-1.5 shadow-elev-2 " +
+        "flex flex-wrap items-center gap-1 rounded-lg border border-border bg-surface p-1.5 shadow-elev-2 min-[480px]:rounded-pill " +
         (readOnly || expanded ? "" : "max-[479px]:hidden")
       }
     >
@@ -152,7 +160,15 @@ export function Toolbar({
       {...{ [CHROME_ATTR]: "" }}
       className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center"
     >
-      <div className="pointer-events-auto flex flex-col items-center gap-2">
+      {/* relative: the positioning anchor for StylePicker's panel (see that
+          file). It has to be here rather than on StylePicker's own small
+          wrapper — the pill can wrap to a second row on a narrow phone, which
+          moves its last item (the swatch trigger) unpredictably, so anything
+          anchored to the trigger itself can land anywhere. This wrapper's
+          width tracks the whole assembly and it's already kept on-screen by
+          the centering above, so anchoring here keeps the panel on-screen too,
+          regardless of where the trigger ends up. */}
+      <div className="relative flex flex-col items-center gap-2 pointer-events-auto">
         {pill}
         <button
           type="button"

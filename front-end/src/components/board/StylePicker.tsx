@@ -47,7 +47,10 @@ export function StylePicker({
   }, [open]);
 
   return (
-    <div ref={wrapRef} className="relative flex items-center">
+    // Not `relative`: the panel below anchors to Toolbar's outer assembly
+    // wrapper instead of this one (see the comment there for why). This div
+    // stays a plain flow element — it only exists for the outside-click check.
+    <div ref={wrapRef} className="flex items-center">
       <Tooltip label="Colour and stroke">
         <button
           type="button"
@@ -78,9 +81,19 @@ export function StylePicker({
         <div
           role="dialog"
           aria-label="Colour and stroke"
+          // Centered on the whole toolbar assembly (Toolbar.tsx's outer
+          // `relative` wrapper), not on this trigger: the trigger is the last
+          // item in the pill, and on a narrow phone the pill wraps to a second
+          // row, moving the trigger — sometimes back to the far left. A panel
+          // centered on the trigger could run off either edge depending on
+          // where that lands; the assembly wrapper is already kept on-screen
+          // by Toolbar's own centering, so anchoring here is safe regardless.
+          // max-w clamps it on top of that for a viewport narrower than the
+          // panel itself, which no device we support actually is — belt and
+          // suspenders.
           className={
-            "absolute bottom-full left-1/2 mb-3 w-64 -translate-x-1/2 rounded-md " +
-            "border border-border bg-surface p-2 shadow-elev-2"
+            "absolute bottom-full left-1/2 mb-3 w-64 max-w-[calc(100vw-2rem)] " +
+            "-translate-x-1/2 rounded-md border border-border bg-surface p-2 shadow-elev-2"
           }
         >
           <Row label="Fill">

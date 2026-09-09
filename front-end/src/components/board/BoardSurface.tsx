@@ -190,15 +190,25 @@ export function BoardSurface({
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
-      {/* §10.12 top bar, 56px */}
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+      {/* §10.12 top bar, 56px. overflow-x-auto is a safety net, not the fix:
+          the title's min-w-12 floor plus ExpiryChip's own responsive collapse
+          (see that file) cover every realistic case at 360px. This only
+          catches what's left — several concurrent collaborators plus a long
+          title on the narrowest phones — by making the excess reachable with
+          a swipe instead of letting it clip past the viewport unreachably, the
+          way it did before either fix. It's inert (no visible scrollbar,
+          nothing shifts) whenever content already fits, which is every normal
+          case. */}
+      <header className="flex h-14 shrink-0 items-center gap-3 overflow-x-auto border-b border-border bg-surface px-4">
         <Link
           href="/"
           className="wordmark shrink-0 rounded-sm text-md text-ink focus-visible:focus-ring"
         >
           skrivle
         </Link>
-        <h1 className="truncate text-sm font-medium text-ink">{board.title}</h1>
+        <h1 className="min-w-12 flex-1 truncate text-sm font-medium text-ink">
+          {board.title}
+        </h1>
 
         <ExpiryChip
           board={board}
