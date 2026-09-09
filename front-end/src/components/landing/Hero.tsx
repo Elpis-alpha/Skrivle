@@ -74,7 +74,6 @@ export function Hero() {
               <span className="size-2 rounded-pill bg-success" aria-hidden="true" />
               Live
             </span>
-            The whole board works — this isn&apos;t a mockup.
             <Link
               href="/#roadmap"
               className="rounded-sm text-ink underline decoration-border underline-offset-4 transition-colors duration-(--dur-fast) ease-standard hover:decoration-accent focus-visible:focus-ring"
