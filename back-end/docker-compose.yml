@@ -2,9 +2,16 @@
 #   dev  — a local install on the host; point DATABASE_URL at host.docker.internal
 #   prod — a managed database; set DATABASE_URL in the environment
 # Redis has no external dependency, so it is bundled here.
+
+# Project name — prefixes every container / network / built image, so
+# `docker ps` shows skrivle-api, skrivle-redis, skrivle_default, etc.
+name: skrivle
+
 services:
   back-end:
     build: .
+    image: skrivle-back-end
+    container_name: skrivle-api
     # Published on the Docker bridge gateway, not 0.0.0.0 — the host's Nginx
     # reverse-proxies to it and nothing off-box should reach the Node port.
     ports:
@@ -41,6 +48,7 @@ services:
   #   docker compose --profile migrate run --rm migrate deploy   # apply pending
   migrate:
     build: .
+    image: skrivle-back-end
     profiles: ["migrate"]
     env_file:
       - .env
@@ -52,6 +60,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    container_name: skrivle-redis
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
@@ -64,3 +73,4 @@ services:
 
 volumes:
   redis-data:
+    name: skrivle-redis-data
