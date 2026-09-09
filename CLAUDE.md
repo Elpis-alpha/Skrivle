@@ -40,6 +40,10 @@ without asking. Each folder currently holds only a `.keep`.
   (rename, delete, extend, claim), not drawing. Easy to get backwards.
 - Back-end tests run against real Postgres and Redis, not mocks
   (`npm run db:test:setup` once, then `npm test`).
+- DB migrations auto-apply on back-end container start
+  (`back-end/docker-entrypoint.sh` → `prisma migrate deploy`, which crash-loops
+  the container on repeated failure). Create them with `npm run prisma:migrate`;
+  `prisma` is a runtime dep so the CLI ships in the image.
 
 ## Status
 

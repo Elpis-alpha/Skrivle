@@ -20,6 +20,8 @@ npm run lint             # ESLint (flat config)
 npm test                 # Vitest (run once)
 npm run test:watch       # Vitest in watch mode
 npm run prisma:migrate   # create + apply a dev migration (needs a running Postgres)
+npm run prisma:deploy    # apply pending migrations (prod path; no schema diffing)
+npm run prisma:status    # show which migrations are applied
 ```
 
 ## Environment
@@ -42,6 +44,29 @@ The container reaches a local dev database at `host.docker.internal` (wired in
 [`docker-compose.yml`](docker-compose.yml)); point `DATABASE_URL` there. Redis
 runs as the `redis` service and the container's `REDIS_URL` is overridden to
 `redis://redis:6379`.
+
+## Database migrations
+
+Schema changes are Prisma migrations in [`prisma/migrations/`](prisma/migrations).
+
+- **Dev:** `npm run prisma:migrate` — diff `schema.prisma`, write a migration,
+  apply it locally.
+- **Production:** migrations apply **automatically**.
+  [`docker-entrypoint.sh`](docker-entrypoint.sh) runs `prisma migrate deploy` on
+  every container start, before the server boots; if it keeps failing the
+  container exits and Compose restarts it, so the server never runs against an
+  un-migrated schema. Safe because there is one back-end process by design (see
+  [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)).
+- **Manual, no redeploy** — a profile-gated one-off container:
+  ```bash
+  docker compose --profile migrate run --rm migrate          # status
+  docker compose --profile migrate run --rm migrate deploy   # apply pending
+  ```
+
+`DATABASE_URL` is the pooled Prisma Postgres endpoint (`pooled.db.prisma.io`);
+`migrate deploy` runs fine against it. If a future multi-statement migration ever
+hangs on the pooled connection, add a `directUrl` to the `datasource` block in
+`schema.prisma` pointing at the direct (non-pooled) endpoint.
 
 ## Layout
 

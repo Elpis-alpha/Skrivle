@@ -10,6 +10,7 @@
 - [x] Scaffold `front-end` (Next.js + Tailwind)
 - [x] Landing page + marketing surface (`/`, about, privacy, faq, contact, terms)
 - [x] Back-end Docker stack (back-end container only; Postgres external, nginx still TODO)
+- [x] Back-end migrations auto-apply on deploy (entrypoint `prisma migrate deploy`)
 - [x] `coming-soon` deployed (Cloudflare, `soon.skrivle.elpis.cc`)
 - [x] `front-end` deployed (Cloudflare Workers / OpenNext, `skrivle.elpis.cc`)
 

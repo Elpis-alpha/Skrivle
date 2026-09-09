@@ -28,8 +28,27 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      # Cold start now also connects to the remote DB and runs `migrate deploy`
+      # (docker-entrypoint.sh) before the server listens. start_period failures
+      # don't count against retries — this just avoids an unhealthy flap.
+      start_period: 30s
     restart: unless-stopped
+
+  # One-off Prisma migration runner. Not started by `docker compose up`
+  # (profile-gated); reuses the back-end image and .env. Works even while the
+  # back-end container is crash-looping on a failed migration.
+  #   docker compose --profile migrate run --rm migrate          # status
+  #   docker compose --profile migrate run --rm migrate deploy   # apply pending
+  migrate:
+    build: .
+    profiles: ["migrate"]
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    entrypoint: ["npx", "--no-install", "prisma", "migrate"]
+    command: ["status"]
+    restart: "no"
 
   redis:
     image: redis:7-alpine

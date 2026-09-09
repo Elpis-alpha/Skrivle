@@ -144,7 +144,14 @@ Hosted under `elpis.cc`, split by tier:
 
 - The front-end took the apex and `coming-soon/` moved to `soon.` on 2026-09-06;
   only the API tier is still pending.
-- Back-end Compose stack: `back-end`, `redis`, `nginx` (Postgres is external).
+- Back-end Compose stack: `back-end` + `redis` (Postgres is external; Nginx is
+  the VPS host's, not a container). A profile-gated `migrate` service shares the
+  image for ad-hoc migration runs.
+- **Migrations apply on container start.** `back-end/docker-entrypoint.sh` runs
+  `prisma migrate deploy` before the server process; repeated failure crash-loops
+  the container rather than serving a stale schema — safe because there is
+  exactly one back-end process. Ad-hoc:
+  `docker compose --profile migrate run --rm migrate {status,deploy}`.
 - The front-end URL is public, but the v1 "working demo URL" criterion is not met
   until the canvas ships.
 
