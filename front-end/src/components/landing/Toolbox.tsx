@@ -17,7 +17,9 @@ export function Toolbox() {
           design system as the board it belongs to.
         </p>
 
-        <div className="mt-8 sm:w-fit">
+        {/* No stagger on the swatches below: seven chips fading up one by one
+            is exactly the template pattern §13.2 rules out. */}
+        <div className="mt-8 rounded-lg bg-wg-50 p-8 sm:w-fit">
           <Toolbar value="note" readOnly />
         </div>
 

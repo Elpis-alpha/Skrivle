@@ -20,13 +20,13 @@
 //    stay invisible for good. Here, anything at or above the viewport counts as
 //    already seen.
 
-import { motion, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion, type Variants } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useMounted } from "@/components/motion/useMounted";
 
 const DURATION = 0.32; // --dur-reveal
 const EASE = [0.3, 0, 0, 1] as const; // --ease-entrance
-const STAGGER = 0.06;
+const STAGGER = 0.06; // --stagger-reveal
 
 const VARIANTS = {
   hidden: { opacity: 0, y: 16 },
@@ -88,7 +88,7 @@ function useRevealed(enabled: boolean) {
   return { ref, shown };
 }
 
-type As = "div" | "section" | "ul" | "ol" | "li";
+type As = "div" | "section" | "ul" | "ol" | "li" | "span";
 
 type RevealProps = {
   children: ReactNode;
@@ -140,9 +140,20 @@ export function Reveal({
 
 /**
  * Parent for a short run of siblings that should arrive 60ms apart.
- * Children must be <RevealItem>.
+ * Children must be <RevealItem> or <RevealChild>.
  */
-export function Stagger({ children, className, as = "div" }: RevealProps) {
+export function Stagger({
+  children,
+  className,
+  as = "div",
+  stagger = STAGGER,
+  delayChildren = 0,
+}: RevealProps & {
+  /** Seconds between siblings. Defaults to --stagger-reveal. */
+  stagger?: number;
+  /** Seconds before the first sibling starts. */
+  delayChildren?: number;
+}) {
   const reduced = useReducedMotion();
   const mounted = useMounted();
   const animated = mounted && !reduced;
@@ -166,7 +177,7 @@ export function Stagger({ children, className, as = "div" }: RevealProps) {
       className={className}
       initial={shown ? "shown" : "hidden"}
       animate={shown ? "shown" : "hidden"}
-      variants={{ shown: { transition: { staggerChildren: STAGGER } } }}
+      variants={{ shown: { transition: { staggerChildren: stagger, delayChildren } } }}
     >
       {children}
     </Component>
@@ -190,6 +201,57 @@ export function RevealItem({ children, className, as = "div" }: RevealProps) {
         hidden: VARIANTS.hidden,
         shown: { ...VARIANTS.shown, transition: { duration: DURATION, ease: EASE } },
       }}
+    >
+      {children}
+    </Component>
+  );
+}
+
+/**
+ * §13.2's one band-internal move: an element that animates on its parent
+ * reveal's timing, with variants of its own rather than the standard rise.
+ *
+ * It reads the enclosing Reveal/Stagger's `hidden`/`shown` label through
+ * motion's context, which travels by React context and so survives any plain
+ * DOM in between. That inheritance is the reason this exists as a component
+ * instead of a bare nested `motion.span`: when the parent falls back to plain
+ * markup — not yet mounted, or reduced motion — there is no label to inherit,
+ * and a bare motion element would sit in its `hidden` variant for good. This
+ * one falls back in step with its parent.
+ */
+export function RevealChild({
+  children,
+  className,
+  as = "div",
+  variants,
+  style,
+  "aria-hidden": ariaHidden,
+}: Omit<RevealProps, "children"> & {
+  /** Optional: a decorative rule that only scales if it has nothing inside it. */
+  children?: ReactNode;
+  variants: Variants;
+  style?: React.CSSProperties;
+  "aria-hidden"?: boolean;
+}) {
+  const reduced = useReducedMotion();
+  const mounted = useMounted();
+  const Component = motion[as] as typeof motion.div;
+
+  if (!mounted || reduced) {
+    const Plain = as as "div";
+    return (
+      <Plain className={className} style={style} aria-hidden={ariaHidden}>
+        {children}
+      </Plain>
+    );
+  }
+
+  return (
+    <Component
+      className={className}
+      style={style}
+      aria-hidden={ariaHidden}
+      variants={variants}
     >
       {children}
     </Component>

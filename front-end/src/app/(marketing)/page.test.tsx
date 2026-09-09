@@ -15,6 +15,18 @@ describe("landing page", () => {
     ).toBeInTheDocument();
   });
 
+  // The headline is split around a <span> so the squiggle has a containing
+  // block to underline. Splitting it wrongly would leave the accessible name
+  // reading "A whiteboard you can share inone link." and nothing else would
+  // notice.
+  it("reads as one sentence despite the annotated word", () => {
+    render(<Page />);
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading.textContent?.replace(/\s+/g, " ").trim()).toBe(
+      "A whiteboard you can share in one link.",
+    );
+  });
+
   it("offers the primary action", () => {
     render(<Page />);
     expect(screen.getAllByRole("button", { name: "New board" }).length).toBeGreaterThan(0);

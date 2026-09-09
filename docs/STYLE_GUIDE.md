@@ -328,8 +328,11 @@ Dark theme: shadows deepen (`rgba(0,0,0,.4/.5)`) **and** raised surfaces get a
 | `--dur-base` | `180ms` | menu/popover open, tool switch, toast in |
 | `--dur-slow` | `280ms` | dialog + scrim, side panel |
 | `--dur-settle` | `400ms` | board hydrate sequence (once per load) |
+| `--dur-draw` | `380ms` | one shape drawing itself (marketing, §13.2) |
+| `--dur-build` | `1200ms` | hero build-in ceiling (marketing, §13.2) |
 | `--ease-standard` | `cubic-bezier(.2,0,0,1)` | most transitions |
 | `--ease-entrance` | `cubic-bezier(.3,0,0,1)` | things entering the screen |
+| `--ease-draw` | `cubic-bezier(.65,0,.35,1)` | a stroke drawing itself (§13.2) |
 
 **Remote cursors:** interpolate position over ~70ms linear — no easing curve
 (curves make cursors look like they're stuttering). Name tag fades out after 3s
@@ -340,6 +343,9 @@ idle, fades back in on movement.
 ready: background → `--canvas-bg` (200ms), dot grid fades in (200ms), then
 elements fade in with an 8px rise, staggered ~20ms in document order. Total under
 `--dur-settle`. That's the whole animation budget for the page.
+
+§13.2's hero build-in is this same sequence dramatised for the landing page —
+the only place it may be slowed down, and only there.
 
 **`prefers-reduced-motion: reduce`:** skip the settle (elements just appear),
 skip the element stagger and rise, keep opacity/color transitions but drop
@@ -650,9 +656,14 @@ Thin (8px), transparent track, `--wg-300` thumb at `--radius-pill`, thumb →
   --dur-base: 180ms;
   --dur-slow: 280ms;
   --dur-reveal: 320ms; /* marketing scroll reveal (§13.2) */
+  --dur-draw: 380ms; /* one shape drawing itself (§13.2) */
   --dur-settle: 400ms;
+  --dur-build: 1200ms; /* hero build-in ceiling (§13.2) — a budget, not a value */
+  --stagger-reveal: 60ms; /* between siblings in a band reveal (§13.2) */
+  --stagger-build: 80ms; /* between steps of the hero build-in (§13.2) */
   --ease-standard: cubic-bezier(.2, 0, 0, 1);
   --ease-entrance: cubic-bezier(.3, 0, 0, 1);
+  --ease-draw: cubic-bezier(.65, 0, .35, 1); /* a hand: accelerates, then lands */
 
   /* focus */
   --focus-ring: 0 0 0 2px var(--canvas-bg), 0 0 0 4px var(--accent);
@@ -885,24 +896,82 @@ product surfaces and answer to §1–§12 alone.
 | Content width | panel/dialog widths | 1120px centred; prose still ≤ 68ch |
 | Section rhythm | 48–64px | 96px, 128px at `lg` (`--space-24` / `--space-32`) |
 | Display type | `text-4xl` ceiling | `text-5xl` for one headline per page |
-| Motion | one moment, per §7 | §13.2 |
+| Motion | one moment, per §7 | §13.2 — a hero budget and a smaller one below it |
 | Illustration | none | §13.3 |
 | Amethyst | primary action + your presence | §13.4 |
 
 ### 13.2 Motion budget
 
-§1's "one motion moment" is a product rule. A marketing page gets two things:
+§1's "one motion moment" is a product rule. Marketing gets a larger budget, and
+it is spent unevenly on purpose: the hero is the peak, everything below it is
+restrained, and the distance between the two is what makes the hero read as an
+event rather than as the page's baseline. A page whose hero and seventh band
+move by the same amount has no hero.
 
-1. **Scroll reveal** — opacity 0→1 with an 16px rise, `--dur-reveal` (320ms)
-   `--ease-entrance`, fired **once**, 60ms stagger between siblings. Reserve it
-   for whole bands arriving, not for every card, chip, and list item; a page
-   where everything fades up reads as a template.
-2. **One ambient loop per page.** On `/` that budget is the hero board preview.
-   Having spent it there, nothing else on `/` may animate on its own.
+**Where motion is written.** Entrances are CSS `@keyframes` with
+`animation-fill-mode: both`. Loops and anything driven by scroll position are
+`motion/react`, gated on `useReducedMotion()`. The split is mechanical, not
+stylistic:
 
-Both are gated on `prefers-reduced-motion: reduce`: reveals become instant, the
-loop holds its finished frame. Hover, press, and focus transitions follow §7
-unchanged.
+- A CSS entrance starts at first paint, before hydration, and finishes on its
+  own if the JavaScript never arrives.
+- A JS entrance has to hide its element in order to animate it, and the server
+  must never send `opacity:0` (`Reveal.tsx` explains why). Hiding at mount
+  instead would paint the finished frame and then take it away — tolerable for a
+  band below the fold that nobody has seen, wrong for the hero, which is on
+  screen from the first paint.
+- The `prefers-reduced-motion` block at the foot of `globals.css` already
+  collapses every CSS animation onto its end state. JS motion is not covered by
+  it and gates itself.
+
+**Two mechanical limits, both enforced by `e2e/home.spec.ts`.** Nothing inside
+`<main>` may hold a fractional inline `opacity` — the guard matches on the
+substring `opacity: 0`, so `opacity: 0.35` trips it. And nothing may move an
+element's right edge outward at any frame, including mid-animation: the 360px
+overflow check samples immediately after load and ignores clipping.
+
+#### The hero (`/` only)
+
+1. **The build-in.** On load the hero assembles itself in the order the real
+   board settles (§7): ground, elements, presence. Ceiling `--dur-build`
+   (1200ms) from first paint to the last element landing. Steps within one run
+   are spaced `--stagger-reveal` to `--stagger-build` (60–80ms) apart, and runs
+   may overlap each other — the board should read as several people working at
+   once, not as a queue. No single step exceeds `--dur-settle` (400ms): the
+   sequence is long, no move within it is.
+2. **Scroll-linked parallax** as the reader leaves the fold. **`y` only** —
+   never `x`, never `scale`, never `opacity`. Travel under 80px. Scroll progress
+   is read once, by one component, and handed out as `MotionValue`s; it never
+   passes through React state.
+3. **The ambient loop.** One per page; on `/` it is the board preview — the
+   freehand stroke drawing itself and the two remote cursors drifting. It starts
+   when the build-in ends, and it is the only thing on `/` that animates
+   indefinitely.
+
+#### Every other band
+
+1. **One reveal per band** — opacity 0→1 with a 16px rise, `--dur-reveal`
+   (320ms) `--ease-entrance`, fired **once**, `--stagger-reveal` (60ms) between
+   siblings. Reserve it for whole bands arriving. A page where every card, chip
+   and list item fades up reads as a template.
+2. **At most one band-internal move,** and only where it says something true
+   about that band's content — the roadmap's rules filling like the progress bar
+   they already are, the how-it-works connectors drawing between steps. It is
+   driven by that band's own reveal (`RevealChild`), never by a trigger of its
+   own, and it never loops.
+3. **Nothing below the fold animates on its own.** The ambient loop is spent.
+
+The closing CTA is the one exception: it is the hero's bookend and may reuse the
+hero's ground. It gets no build-in, no loop, and no parallax.
+
+**`prefers-reduced-motion: reduce`.** The build-in and every reveal become
+instant, each element holding its finished frame at full opacity. The parallax
+layers keep their element type and simply go untransformed — no `style` is
+written at all — because swapping a `motion.div` for a plain one at mount would
+remount the hero and restart the build-in it had just finished. The ambient loop
+holds the drawn stroke and the cursors at rest. A reduced-motion reader sees the
+same composition as everyone else, and nothing moves. Hover, press and focus
+transitions follow §7 unchanged.
 
 ### 13.3 Illustration
 
@@ -930,8 +999,9 @@ adjacent copy carries the meaning.
 
 §1's rule holds for **solid** amethyst: a filled `--accent` block is still the
 primary action and nothing else. Marketing may additionally use `--accent-subtle`
-as a section or chip tint, `--accent-400` inside illustration line art, and
-`--accent-100` as a hairline. Never a full-bleed amethyst band — the moment the
+as a section or chip tint, `--accent-400` inside illustration line art **and in
+hand-drawn annotation strokes** (the hero's headline underline — line art by
+another name), and `--accent-100` as a hairline. Never a full-bleed amethyst band — the moment the
 accent becomes a background, the primary button stops meaning anything.
 
 ### 13.5 Honesty

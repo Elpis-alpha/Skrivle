@@ -93,7 +93,16 @@
   --dur-base: 180ms;
   --dur-slow: 280ms;
   --dur-reveal: 320ms;
+  --dur-draw: 380ms;
   --dur-settle: 400ms;
+  /* The hero build-in's ceiling (§13.2), not a value to hand to `animation`:
+     every step's own delay + duration must land inside it. */
+  --dur-build: 1200ms;
+
+  /* stagger (§13.2) — documentation for the values Reveal.tsx and BoardMock
+     hard-code, so the guide and the code can be checked against each other. */
+  --stagger-reveal: 60ms;
+  --stagger-build: 80ms;
 
   /* focus */
   --focus-ring: 0 0 0 2px var(--canvas-bg), 0 0 0 4px var(--accent);
@@ -208,6 +217,8 @@
   /* motion easing (§7) */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-entrance: cubic-bezier(0.3, 0, 0, 1);
+  /* A hand drawing a line: leaves fast, arrives slow (§13.2). */
+  --ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 /* Theme-swapped values → Tailwind namespaces. `inline` so utilities resolve
@@ -336,6 +347,122 @@
     #000 35%,
     transparent 100%
   );
+}
+
+/* §13.2 — the hero's ground: the canvas dot grid with one soft light under the
+   board card. --accent-subtle is the only accent permitted here, and it is
+   theme-swapped (#f4eef9 light / rgba(165,127,199,.16) dark), so the light dims
+   in dark mode instead of blowing out. This is a tint beneath an object, never a
+   band (§13.4). Kept separate from `dot-grid` rather than layered onto it: six
+   other surfaces use that utility, and two background-image utilities on one
+   element would overwrite each other anyway. */
+@utility hero-ground {
+  background-image:
+    radial-gradient(
+      ellipse 52% 44% at var(--hero-light-x, 50%) var(--hero-light-y, 70%),
+      var(--accent-subtle),
+      transparent 70%
+    ),
+    radial-gradient(var(--grid-dot) 0.75px, transparent 0.75px);
+  background-size:
+    auto,
+    24px 24px;
+  background-position: center, center;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   §13.2 — the hero build-in.
+
+   These are CSS, not motion/react, and that is a correctness decision rather
+   than a stylistic one. The hero is on screen at first paint, so a JS entrance
+   would have to either ship `opacity:0` in the server HTML (which
+   e2e/home.spec.ts forbids, and which hides the page when JS never arrives) or
+   hide the board at mount — painting a finished board and then disassembling
+   it. CSS animates *during* hydration instead, and finishes on its own if the
+   JavaScript never lands.
+
+   Every participant carries its own delay as an arbitrary property in its
+   className (`build-place [--build-delay:240ms]`), so no inline style is
+   written and neither guard in home.spec.ts can trip.
+
+   The reduced-motion block at the foot of this file zeroes every duration and
+   delay; combined with `both` fill mode that lands each element straight on its
+   end frame, so none of these need a JS `reduced` branch.
+
+   `translate:`/`scale:` are the individual transform properties, matching
+   `board-settle-in` above — a build-in must never clobber a `transform` that
+   motion is writing on the same element.
+   ──────────────────────────────────────────────────────────────────────────── */
+@keyframes build-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes build-place {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+    scale: 0.97;
+    rotate: var(--build-rot, 0deg);
+  }
+  to {
+    opacity: 1;
+    translate: none;
+    scale: 1;
+    rotate: 0deg;
+  }
+}
+
+/* Presence appearing, not a toy inflating: starts at 72%, never overshoots. */
+@keyframes build-pop {
+  from {
+    opacity: 0;
+    translate: 0 3px;
+    scale: 0.72;
+  }
+  to {
+    opacity: 1;
+    translate: none;
+    scale: 1;
+  }
+}
+
+@keyframes build-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@utility build-fade {
+  animation: build-fade var(--build-dur, var(--dur-slow)) var(--ease-standard)
+    var(--build-delay, 0ms) both;
+}
+
+@utility build-place {
+  animation: build-place var(--build-dur, var(--dur-slow)) var(--ease-entrance)
+    var(--build-delay, 0ms) both;
+}
+
+@utility build-pop {
+  animation: build-pop var(--build-dur, var(--dur-base)) var(--ease-entrance)
+    var(--build-delay, 0ms) both;
+}
+
+/* Requires pathLength="1" on the element: without it the dash is one user unit
+   and the shape renders as dots. The resting state is fully drawn, so failing to
+   animate leaves the drawing intact rather than blank. */
+@utility build-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: build-draw var(--build-dur, var(--dur-draw)) var(--ease-draw)
+    var(--build-delay, 0ms) both;
 }
 
 /* §13.1 — marketing content width. Prose inside still caps at --container-measure. */

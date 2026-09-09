@@ -1,4 +1,4 @@
-import { Reveal } from "@/components/motion/Reveal";
+import { RevealItem, Stagger } from "@/components/motion/Reveal";
 import { DesignSprint } from "@/components/illustrations/DesignSprint";
 import { Button } from "@/components/ui/Button";
 import { SITE } from "@/lib/site";
@@ -7,8 +7,11 @@ export function OpenSource() {
   return (
     <section id="open-source" className="scroll-mt-20 bg-wg-50 py-20 lg:py-24">
       <div className="shell">
-        <Reveal className="grid items-center gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
-          <div>
+        <Stagger
+          stagger={0.12}
+          className="grid items-center gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-16"
+        >
+          <RevealItem>
             <h2 className="text-xl text-ink">Built in the open</h2>
 
             <div className="mt-4 flex max-w-measure flex-col gap-4 text-base text-ink-secondary">
@@ -42,10 +45,16 @@ export function OpenSource() {
                 What&apos;s built so far
               </Button>
             </div>
-          </div>
+          </RevealItem>
 
-          <DesignSprint className="w-full" />
-        </Reveal>
+          {/* --surface, not the wg-50 plate the other bands use: this band is
+              already tinted, so the art needs to come forward, not recede. */}
+          <RevealItem>
+            <div className="rounded-lg bg-surface p-6">
+              <DesignSprint className="w-full" />
+            </div>
+          </RevealItem>
+        </Stagger>
       </div>
     </section>
   );

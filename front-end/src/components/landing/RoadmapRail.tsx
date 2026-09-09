@@ -1,7 +1,8 @@
 // Status, stated plainly — §13.5. The board itself isn't built yet and the page
 // says so here rather than letting a visitor find out by clicking.
 
-import { Reveal } from "@/components/motion/Reveal";
+import { Reveal, RevealChild, RevealItem, Stagger } from "@/components/motion/Reveal";
+import type { Variants } from "motion/react";
 
 type Stage = {
   phase: string;
@@ -38,11 +39,23 @@ const STATE_LABEL: Record<Stage["state"], string> = {
 };
 
 // The rail doubles as a progress bar: the top rule fills in as far as the work
-// has actually got.
+// has actually got. It is a background rather than a border so it can be scaled
+// — §13.2's one band-internal move, and it earns the exception by saying
+// something true about the band rather than decorating it.
 const RAIL: Record<Stage["state"], string> = {
-  done: "border-accent",
-  building: "border-accent-200",
-  planned: "border-border",
+  done: "bg-accent",
+  building: "bg-accent-200",
+  planned: "bg-border",
+};
+
+// scaleX only ever shrinks the rule below its natural width, so it cannot push
+// an element's right edge outward — the constraint §13.2 names.
+const RULE: Variants = {
+  hidden: { scaleX: 0 },
+  shown: {
+    scaleX: 1,
+    transition: { duration: 0.32, ease: [0.3, 0, 0, 1], delay: 0.08 },
+  },
 };
 
 export function RoadmapRail() {
@@ -57,9 +70,15 @@ export function RoadmapRail() {
           </p>
         </Reveal>
 
-        <ol className="mt-10 grid gap-8 sm:grid-cols-3">
+        <Stagger as="ol" stagger={0.08} className="mt-10 grid gap-8 sm:grid-cols-3">
           {STAGES.map((stage) => (
-            <li key={stage.phase} className={`border-t-2 pt-4 ${RAIL[stage.state]}`}>
+            <RevealItem key={stage.phase} as="li" className="relative pt-4">
+              <RevealChild
+                as="span"
+                aria-hidden={true}
+                variants={RULE}
+                className={`absolute inset-x-0 top-0 h-0.5 origin-left ${RAIL[stage.state]}`}
+              />
               <div className="flex items-center gap-2">
                 {/* Static, not a pulse: the hero mock has already spent this
                     page's one ambient loop (§13.2). */}
@@ -89,9 +108,9 @@ export function RoadmapRail() {
                   </li>
                 ))}
               </ul>
-            </li>
+            </RevealItem>
           ))}
-        </ol>
+        </Stagger>
       </div>
     </section>
   );

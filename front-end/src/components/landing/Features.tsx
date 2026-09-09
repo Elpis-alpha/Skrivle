@@ -1,6 +1,6 @@
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
-import { Reveal } from "@/components/motion/Reveal";
+import { Reveal, RevealItem, Stagger } from "@/components/motion/Reveal";
 import { Avatars } from "@/components/illustrations/Avatars";
 import { LiveCollaboration } from "@/components/illustrations/LiveCollaboration";
 import { WorkingTogether } from "@/components/illustrations/WorkingTogether";
@@ -59,11 +59,12 @@ export function Features() {
 
         <div className="mt-12 flex flex-col gap-20 lg:gap-24">
           {BANDS.map((band, index) => (
-            <Reveal
+            <Stagger
               key={band.id}
+              stagger={0.09}
               className="grid items-center gap-8 lg:grid-cols-2 lg:gap-16"
             >
-              <div className={index % 2 === 1 ? "lg:order-2" : undefined}>
+              <RevealItem className={index % 2 === 1 ? "lg:order-2" : undefined}>
                 <h3 className="text-lg text-ink">{band.title}</h3>
                 <p className="mt-3 max-w-measure text-base text-ink-secondary">
                   {band.body}
@@ -81,10 +82,14 @@ export function Features() {
                     </li>
                   ))}
                 </ul>
-              </div>
+              </RevealItem>
 
-              <div className={index % 2 === 1 ? "lg:order-1" : undefined}>{band.art}</div>
-            </Reveal>
+              {/* The illustrations were floating on the page ground with
+                  nothing under them; a plate gives each one an edge. */}
+              <RevealItem className={index % 2 === 1 ? "lg:order-1" : undefined}>
+                <div className="rounded-lg bg-wg-50 p-6 lg:p-8">{band.art}</div>
+              </RevealItem>
+            </Stagger>
           ))}
         </div>
       </div>

@@ -170,6 +170,98 @@ test.describe("scroll reveals never strand content", () => {
   });
 });
 
+test.describe("the hero build-in", () => {
+  test("assembles the board without ever hiding it from the server", async ({
+    page,
+    request,
+  }) => {
+    // The build-in is CSS, carried on classes, so the served markup must show
+    // the steps present and no hidden state baked in. A JS entrance here would
+    // have to do the opposite.
+    const html = await (await request.get("/")).text();
+    expect(html).not.toContain("opacity:0");
+    expect(html).toContain("build-place");
+    expect(html).toContain("build-draw");
+
+    await page.goto("/");
+
+    // Scoped to the hero on purpose: the bands below the fold legitimately sit
+    // at opacity 0 until their reveal fires, and the deep-link test below is
+    // what covers those. Nothing in the hero may hold an inline opacity at any
+    // point — the guard matches the substring, so 0.35 trips it as surely as 0.
+    const hero = page.locator("main > section").first();
+    await expect(hero.getByText("Ship the share link")).toBeVisible();
+    await expect.poll(() => hero.locator('[style*="opacity: 0"]').count()).toBe(0);
+
+    // The freehand stroke and both cursors are the ambient loop, and they are
+    // the only things still moving once the build-in has landed.
+    await expect(hero.getByText("Maya")).toBeVisible();
+    await expect(hero.getByText("Ben")).toBeVisible();
+  });
+
+  test("every drawn shape ends up fully drawn", async ({ page }) => {
+    await page.goto("/");
+
+    // stroke-dashoffset 0 is "drawn"; pathLength="1" is what makes the dash a
+    // fraction of the path rather than one user unit.
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          [...document.querySelectorAll(".build-draw")].map((el) =>
+            Number.parseFloat(getComputedStyle(el).strokeDashoffset),
+          ),
+        ))
+      .toEqual([0, 0, 0, 0, 0]);
+  });
+});
+
+test.describe("reduced motion", () => {
+  test.use({ reducedMotion: "reduce" });
+
+  test("the hero holds its finished frame instead of playing", async ({ page }) => {
+    await page.goto("/");
+
+    // Read synchronously rather than with an auto-waiting assertion: the point
+    // is that the reduced-motion block in globals.css collapses every step onto
+    // its end frame, so there is nothing to wait for.
+    const settled = await page.evaluate(() => ({
+      opacities: [
+        ...document.querySelectorAll(
+          "main .build-place, main .build-pop, main .build-fade",
+        ),
+      ].map((el) => Number(getComputedStyle(el).opacity)),
+      offsets: [...document.querySelectorAll("main .build-draw")].map((el) =>
+        Number.parseFloat(getComputedStyle(el).strokeDashoffset),
+      ),
+    }));
+
+    expect(settled.opacities.length).toBeGreaterThan(8);
+    expect(Math.min(...settled.opacities)).toBe(1);
+    expect(settled.offsets).toEqual([0, 0, 0, 0, 0]);
+
+    // The composition is the same one everyone else gets, not a reduced one.
+    await expect(page.getByText("Ship the share link")).toBeVisible();
+    await expect(page.getByText("Maya")).toBeVisible();
+  });
+
+  test("nothing overflows horizontally at 360px once settled", async ({ page }) => {
+    // The animated twin of this check samples mid-build-in, which is the canary
+    // for a step that moves an element rightward. This one pins the settled
+    // layout deterministically.
+    await page.setViewportSize({ width: 360, height: 760 });
+    await page.goto("/");
+
+    const overflow = await page.evaluate(() => {
+      const limit = document.body.getBoundingClientRect().width + 1;
+      return [...document.querySelectorAll("body *")].filter(
+        (el) => el.getBoundingClientRect().right > limit,
+      ).length;
+    });
+
+    expect(overflow).toBe(0);
+  });
+});
+
 test("an unknown page returns the 404 in the product's voice", async ({ page }) => {
   const response = await page.goto("/no-such-page");
   expect(response?.status()).toBe(404);

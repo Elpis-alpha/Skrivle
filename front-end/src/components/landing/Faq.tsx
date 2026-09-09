@@ -15,13 +15,13 @@ export function Faq() {
           <h2 className="text-xl text-ink">Questions</h2>
         </Reveal>
 
-        <div className="mt-8 max-w-2xl border-t border-border">
+        <Reveal delay={0.06} className="mt-8 max-w-2xl border-t border-border">
           {FAQS.map((entry) => (
             <Disclosure key={entry.q} summary={entry.q} className="border-b border-border">
               {entry.a}
             </Disclosure>
           ))}
-        </div>
+        </Reveal>
 
         <p className="mt-6 flex flex-wrap items-center gap-3 text-base text-ink-muted">
           Something else on your mind?

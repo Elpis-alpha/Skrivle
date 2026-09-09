@@ -1,4 +1,10 @@
-import { Reveal, RevealItem, Stagger } from "@/components/motion/Reveal";
+import type { Variants } from "motion/react";
+import {
+  Reveal,
+  RevealChild,
+  RevealItem,
+  Stagger,
+} from "@/components/motion/Reveal";
 
 // Numbered because this genuinely is a sequence — three steps in order, not
 // three features wearing numbers.
@@ -17,6 +23,17 @@ const STEPS = [
   },
 ];
 
+// The connector draws left-to-right as each step lands, so the sequence
+// literally connects itself — §13.2's one band-internal move. clipPath rather
+// than scaleX: scaling a dashed border stretches the dashes along with it.
+const CONNECTOR: Variants = {
+  hidden: { clipPath: "inset(0 100% 0 0)" },
+  shown: {
+    clipPath: "inset(0 0 0 0)",
+    transition: { duration: 0.32, ease: [0.3, 0, 0, 1], delay: 0.16 },
+  },
+};
+
 export function HowItWorks() {
   return (
     <section id="how-it-works" className="scroll-mt-20">
@@ -32,8 +49,10 @@ export function HowItWorks() {
             <RevealItem key={step.title} as="li" className="relative">
               {/* the connector: a dashed rule between steps, not under the last */}
               {index < STEPS.length - 1 ? (
-                <span
-                  aria-hidden="true"
+                <RevealChild
+                  as="span"
+                  aria-hidden={true}
+                  variants={CONNECTOR}
                   className="absolute left-11 top-4 hidden h-px w-[calc(100%-2rem)] border-t border-dashed border-border-strong sm:block"
                 />
               ) : null}
