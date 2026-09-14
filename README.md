@@ -4,9 +4,6 @@ A live collaborative whiteboard. Create a board, start drawing or writing instan
 no signup. Share the URL and others join and edit in real time. Optional sign-in
 persists boards long-term.
 
-> **Status: coming soon.** This repo currently holds documentation and structure only.
-> No application code yet.
-
 ## Repository layout
 
 Monorepo — one GitHub repo, one top-level folder per component. Each folder owns
