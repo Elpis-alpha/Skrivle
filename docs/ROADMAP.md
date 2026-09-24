@@ -44,9 +44,9 @@ board. Front-end only — no doc schema or wire-format changes.
 - [x] Ink keeps up with the pointer: pen, resize and draw-out paint every frame
 - [x] A peer's moves and resizes ease in instead of landing in 50ms steps
 - [x] Tapered pen ink; shape outlines no longer clipped to their box
-- [ ] Share button + dialog, inline title rename, toasts
-- [ ] Zoom control, fit to content, and fit on load
-- [ ] Empty-board hint
+- [x] Share button + dialog, inline title rename, toasts
+- [x] Zoom control, fit to content, and fit on load
+- [x] Empty-board hint
 - [ ] Peers' selections shown on the board
 - [ ] Copy, paste, duplicate
 

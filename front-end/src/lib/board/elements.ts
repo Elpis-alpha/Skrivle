@@ -22,7 +22,7 @@ import {
   type StrokeWidth,
 } from "@/lib/realtime/doc-schema";
 import { LOCAL } from "@/lib/realtime/board-session";
-import { resizedFields, type Rect } from "./geometry";
+import { bboxOf, resizedFields, unionRects, type Rect } from "./geometry";
 import { MAX_POINTS } from "./stroke";
 
 export type ElementMap = Y.Map<unknown>;
@@ -92,6 +92,14 @@ export function orderedIds(doc: Y.Doc): string[] {
     }
   }
   return ids;
+}
+
+/** Everything on the board, as one box in board units; null when it's empty. */
+export function contentBounds(doc: Y.Doc): Rect | null {
+  const els = elements(doc);
+  const boxes: Rect[] = [];
+  for (const [id, map] of els) boxes.push(bboxOf(readElement(id, map)));
+  return unionRects(boxes);
 }
 
 /**

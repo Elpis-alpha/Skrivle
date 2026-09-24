@@ -336,6 +336,22 @@
   animation: board-settle-in 200ms var(--ease-entrance) both;
 }
 
+/* §10.17 toast in: --dur-base, a 4px rise. Reduced motion zeroes it globally. */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+  to {
+    opacity: 1;
+    translate: none;
+  }
+}
+
+@utility toast-in {
+  animation: toast-in var(--dur-base) var(--ease-entrance) both;
+}
+
 @utility grid-fade {
   -webkit-mask-image: radial-gradient(
     ellipse 75% 70% at 50% 35%,

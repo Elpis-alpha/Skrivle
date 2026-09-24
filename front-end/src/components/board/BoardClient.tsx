@@ -17,6 +17,7 @@ import {
   BoardUnreachable,
 } from "@/components/board/BoardStates";
 import { BoardSurface } from "@/components/board/BoardSurface";
+import { ToastProvider } from "@/components/ui/Toast";
 import { getBoard } from "@/lib/api/boards";
 import { useAuthLanding } from "@/lib/auth/landing";
 import { claimIfPossible } from "@/lib/board/claim";
@@ -70,5 +71,11 @@ export function BoardClient({ id }: { id: string }) {
     );
   }
 
-  return <BoardSurface board={board.data} onBoardChange={board.set} />;
+  // §10.17 — the board is the product's one toast surface: "Link copied",
+  // "Title saved", and anything that failed.
+  return (
+    <ToastProvider>
+      <BoardSurface board={board.data} onBoardChange={board.set} />
+    </ToastProvider>
+  );
 }

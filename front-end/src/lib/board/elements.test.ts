@@ -6,6 +6,7 @@ import { LOCAL } from "@/lib/realtime/board-session";
 import {
   appendPoints,
   applyTextEdit,
+  contentBounds,
   createElement,
   createNote,
   moveBy,
@@ -405,5 +406,18 @@ describe("applyTextEdit", () => {
     expect(textA.toString()).toBe(textB.toString());
     expect(textA.toString()).toContain("hello");
     expect(textA.toString()).toContain("world");
+  });
+});
+
+describe("contentBounds", () => {
+  it("is null for an empty board", () => {
+    expect(contentBounds(doc)).toBeNull();
+  });
+
+  it("spans every element, however each stores its box", () => {
+    createElement(doc, { kind: "rect", x: 10, y: 20, w: 100, h: 50 });
+    // A line drawn up and to the left: its w/h are a negative delta.
+    createElement(doc, { kind: "line", x: 0, y: 200, w: -40, h: -30 });
+    expect(contentBounds(doc)).toEqual({ x: -40, y: 20, w: 150, h: 180 });
   });
 });

@@ -100,3 +100,44 @@ test("My Boards asks you to sign in rather than 404ing", async ({ page }) => {
   expect(response?.status()).toBe(200);
   await expect(page.getByRole("heading", { name: /Sign in to see your boards/ })).toBeVisible();
 });
+
+test("the Share button hands over the board's link", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const url = await newBoard(page);
+
+  await page.getByRole("button", { name: "Share" }).click();
+  const dialog = page.getByRole("dialog", { name: "Share this board" });
+  await expect(dialog.getByRole("textbox", { name: "Board link" })).toHaveValue(url);
+
+  await dialog.getByRole("button", { name: "Copy link" }).click();
+
+  await expect(page.getByRole("status")).toHaveText("Link copied");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(url);
+});
+
+test("the zoom control and its keys move the camera", async ({ page }) => {
+  await newBoard(page);
+  const readout = page.getByRole("button", { name: /reset zoom/i });
+  await expect(readout).toHaveText("100%");
+
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await expect(readout).toHaveText("125%");
+
+  await page.getByTestId("board-canvas").focus();
+  await page.keyboard.press("ControlOrMeta+Equal");
+  await expect(readout).toHaveText("150%");
+
+  await page.keyboard.press("Shift+Digit0");
+  await expect(readout).toHaveText("100%");
+});
+
+test("the board's top bar fits a 360px phone without scrolling", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 720 });
+  await newBoard(page);
+  await expect(page.getByTestId("presence-avatar")).toHaveCount(1);
+
+  const overflow = await page
+    .locator("header")
+    .evaluate((header) => header.scrollWidth - header.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});

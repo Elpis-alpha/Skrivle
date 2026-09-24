@@ -571,6 +571,7 @@ Reduced-motion → static `--wg-50` block.
 | Connection lost | Slim `--warning-subtle` bar under the top bar: _"Reconnecting…"_. On recovery: toast _"Back online"_, bar clears. Never blocks the canvas. |
 | Board expired | Centered card: _"This board has expired."_ + `Start a new board`. |
 | Empty My Boards | _"No boards yet. Create one to get started."_ + primary `New board`. |
+| Empty board | Centred on the canvas, no card: _"This board is empty."_ (`text-md` 500) over _"Press N for a note or P to draw — or share the link and draw together."_ (`text-sm` `--ink-secondary`, keys as small bordered chips; coarse pointers get _"Pick a tool below to start"_ instead), then a secondary `Copy link`. Only once the doc has loaded. Presses pass straight through the text to the canvas; gone the moment anything lands, from anyone. |
 | Save/permission error | Toast, `--danger` text, names the cause and the retry. |
 
 Errors are in the interface's voice, state what happened and the next step, and
@@ -580,6 +581,25 @@ never apologize.
 
 Thin (8px), transparent track, `--wg-300` thumb at `--radius-pill`, thumb →
 `--wg-400` on hover. Canvas itself has no visible scrollbar (it pans).
+
+### 10.23 Zoom control
+
+A second, smaller piece of the toolbar's hardware: pill, `--surface`, 1px
+`--border`, `--elev-2`, 4px padding. Bottom-left, 16px in and 24px up, level
+with the toolbar; **top-left below `md`**, where the bottom edge belongs to the
+toolbar. `−` · readout · `+` · divider · fit. Icons 16px `--ink-secondary`;
+the readout is `text-xs` `tabular-nums`, and pressing it returns to 100%.
+
+- Zoom steps land on fixed stops: 10 · 25 · 50 · 75 · 100 · 125 · 150 · 200 ·
+  300 · 400%. A zoom left between stops by the wheel goes to the nearest stop in
+  the direction pressed.
+- Keys on the canvas: `Ctrl/⌘ =` and `Ctrl/⌘ −` zoom about the middle of the
+  view, `Shift 0` returns to 100%, `Shift 1` fits everything on the board.
+- Camera moves the user asked for glide over `--dur-slow` and give way to any
+  wheel or pan mid-glide; reduced motion jumps.
+- Fit never zooms past 100%, and a board opens fitted to its content when none
+  of it would otherwise be in view — a shared link should never open on blank
+  paper.
 
 ---
 

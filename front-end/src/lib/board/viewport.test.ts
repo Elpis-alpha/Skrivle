@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  animateViewport,
   boardToScreen,
+  fitRect,
   clampViewport,
   createViewportStore,
   GRID_SPACING,
@@ -9,8 +11,10 @@ import {
   IDENTITY,
   MAX_SCALE,
   MIN_SCALE,
+  nextZoom,
   panBy,
   screenToBoard,
+  visibleRect,
   zoomAt,
 } from "./viewport";
 
@@ -161,5 +165,104 @@ describe("createViewportStore", () => {
     store.subscribe(listener)();
     store.set({ x: 1, y: 0, scale: 1 });
     expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe("fitRect", () => {
+  const host = { w: 1000, h: 600 };
+
+  it("centres the content in the view", () => {
+    const viewport = fitRect({ x: 100, y: 100, w: 200, h: 100 }, host);
+    const centre = boardToScreen({ x: 200, y: 150 }, viewport);
+    expect(centre.x).toBeCloseTo(500);
+    expect(centre.y).toBeCloseTo(300);
+  });
+
+  it("scales big content down until it fits inside the padding", () => {
+    const viewport = fitRect({ x: 0, y: 0, w: 4000, h: 1000 }, host, 50);
+    expect(viewport.scale).toBeCloseTo(900 / 4000);
+  });
+
+  // A lone sticky note filling the screen at 400% is not "fit", it's a jump.
+  it("never zooms past 100% for small content", () => {
+    expect(fitRect({ x: 0, y: 0, w: 20, h: 20 }, host).scale).toBe(1);
+  });
+
+  it("stops at the zoom floor for enormous content", () => {
+    expect(fitRect({ x: 0, y: 0, w: 1e6, h: 1e6 }, host).scale).toBe(MIN_SCALE);
+  });
+});
+
+describe("visibleRect", () => {
+  it("is the part of the board the host is showing, in board units", () => {
+    expect(visibleRect({ x: -100, y: 50, scale: 2 }, { w: 800, h: 400 })).toEqual({
+      x: 50,
+      y: -25,
+      w: 400,
+      h: 200,
+    });
+  });
+});
+
+describe("nextZoom", () => {
+  it("steps to the next stop up or down", () => {
+    expect(nextZoom(1, 1)).toBe(1.25);
+    expect(nextZoom(1, -1)).toBe(0.75);
+  });
+
+  it("snaps an in-between zoom to the nearest stop in that direction", () => {
+    expect(nextZoom(1.1, 1)).toBe(1.25);
+    expect(nextZoom(1.1, -1)).toBe(1);
+  });
+
+  it("stays put at either end", () => {
+    expect(nextZoom(MAX_SCALE, 1)).toBe(MAX_SCALE);
+    expect(nextZoom(MIN_SCALE, -1)).toBe(MIN_SCALE);
+  });
+});
+
+describe("animateViewport", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("glides the camera to its target and lands on it exactly", () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+    const store = createViewportStore();
+    const target = { x: 300, y: -120, scale: 2 };
+
+    animateViewport(store, target, 200);
+    vi.advanceTimersToNextFrame();
+    const midway = store.getSnapshot();
+    expect(midway.scale).toBeGreaterThan(1);
+    expect(midway.scale).toBeLessThan(2);
+
+    vi.advanceTimersByTime(250);
+    expect(store.getSnapshot()).toEqual(target);
+  });
+
+  it("gives way the moment someone moves the camera themselves", () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+    const store = createViewportStore();
+
+    const stop = animateViewport(store, { x: 300, y: 0, scale: 2 }, 200);
+    vi.advanceTimersToNextFrame();
+    stop();
+    const stopped = store.getSnapshot();
+    vi.advanceTimersByTime(250);
+
+    expect(store.getSnapshot()).toEqual(stopped);
+  });
+
+  it("yields to a wheel or pan that lands mid-glide", () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+    const store = createViewportStore();
+
+    animateViewport(store, { x: 300, y: 0, scale: 2 }, 200);
+    vi.advanceTimersToNextFrame();
+    store.set({ x: -50, y: -50, scale: 0.5 });
+    vi.advanceTimersByTime(250);
+
+    expect(store.getSnapshot()).toEqual({ x: -50, y: -50, scale: 0.5 });
   });
 });

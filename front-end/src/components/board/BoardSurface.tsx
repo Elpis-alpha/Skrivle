@@ -9,6 +9,7 @@
 
 import { useCallback, useReducer, useRef, useState } from "react";
 import Link from "next/link";
+import { Share2 } from "lucide-react";
 import { AvatarCluster } from "@/components/board/AvatarCluster";
 import { CameraLayer } from "@/components/board/CameraLayer";
 import { ConnectionBar } from "@/components/board/ConnectionBar";
@@ -17,7 +18,11 @@ import { SelectionLayer } from "@/components/board/SelectionLayer";
 import { Toolbar } from "@/components/board/Toolbar";
 import { ExpiryChip } from "@/components/board/ExpiryChip";
 import { PresenceLayer } from "@/components/board/PresenceLayer";
+import { ShareDialog } from "@/components/board/ShareDialog";
+import { ZoomControl } from "@/components/board/ZoomControl";
 import { BoardExpired, BoardNotFound } from "@/components/board/BoardStates";
+import { BoardTitle } from "@/components/board/BoardTitle";
+import { EmptyBoardHint } from "@/components/board/EmptyBoardHint";
 import { Button } from "@/components/ui/Button";
 import type { BoardWithRole } from "@/lib/api/types";
 import { displayNameFor } from "@/lib/board/guest-name";
@@ -25,6 +30,7 @@ import { readElement, removeElements, updateElement } from "@/lib/board/elements
 import { isChrome, isTypingTarget, useBoardGestures } from "@/lib/board/useBoardGestures";
 import { createPreviewStore } from "@/lib/board/preview";
 import { useBoardTools } from "@/lib/board/useBoardTools";
+import { useCamera } from "@/lib/board/useCamera";
 import { useThumbnail } from "@/lib/board/useThumbnail";
 import {
   INITIAL_TOOL_STATE,
@@ -65,6 +71,7 @@ export function BoardSurface({
   const [preview] = useState(createPreviewStore);
   const [grabbing, setGrabbing] = useState(false);
   const [tools, dispatch] = useReducer(toolReducer, INITIAL_TOOL_STATE);
+  const [sharing, setSharing] = useState(false);
 
   // Never empty: the gateway's `user?.name ?? guestName ?? "Guest"` can't fall
   // through to "Guest", because guestName defaults to "" — which isn't nullish.
@@ -131,6 +138,8 @@ export function BoardSurface({
     preview,
   });
 
+  const camera = useCamera({ doc, store: viewport, hostRef, hydrated });
+
   useBoardGestures({
     hostRef,
     store: viewport,
@@ -148,6 +157,18 @@ export function BoardSurface({
     (event: React.KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey) {
         const key = event.key.toLowerCase();
+        // Zoom keys, taken from the browser's page zoom while the canvas has
+        // focus — zooming the page around a zoomable canvas is never wanted.
+        if (key === "=" || key === "+") {
+          event.preventDefault();
+          camera.zoomIn();
+          return;
+        }
+        if (key === "-") {
+          event.preventDefault();
+          camera.zoomOut();
+          return;
+        }
         // Never reached while typing: the textarea stops propagation, so a note
         // keeps its own native undo stack rather than fighting this one.
         if (key === "z") {
@@ -161,6 +182,19 @@ export function BoardSurface({
         return;
       }
       if (event.altKey) return;
+
+      // By physical key: Shift+1 is "!" on one layout and something else on
+      // the next, but it is always Digit1.
+      if (event.shiftKey && event.code === "Digit1") {
+        event.preventDefault();
+        camera.fit();
+        return;
+      }
+      if (event.shiftKey && event.code === "Digit0") {
+        event.preventDefault();
+        camera.resetZoom();
+        return;
+      }
 
       if (event.key === "Escape") {
         dispatch({ type: "clear" });
@@ -183,7 +217,7 @@ export function BoardSurface({
         dispatch({ type: "tool", tool });
       }
     },
-    [doc, tools.selection, undo, redo, stopCapturing],
+    [doc, tools.selection, undo, redo, stopCapturing, camera],
   );
 
   // A board that vanished while we were looking at it. The REST fetch already
@@ -202,24 +236,30 @@ export function BoardSurface({
           way it did before either fix. It's inert (no visible scrollbar,
           nothing shifts) whenever content already fits, which is every normal
           case. */}
-      <header className="flex h-14 shrink-0 items-center gap-3 overflow-x-auto border-b border-border bg-surface px-4">
+      <header className="flex h-14 shrink-0 items-center gap-3 overflow-x-auto border-b border-border bg-surface px-4 max-sm:gap-2">
         <Link
           href="/"
           className="wordmark shrink-0 rounded-sm text-md text-ink focus-visible:focus-ring"
         >
           skrivle
         </Link>
-        <h1 className="min-w-12 flex-1 truncate text-sm font-medium text-ink">
-          {board.title}
-        </h1>
+        <BoardTitle board={board} onRenamed={onBoardChange} />
 
         <ExpiryChip
           board={board}
           onExtended={(expiresAt) => onBoardChange({ ...board, expiresAt })}
         />
 
-        <div className="ml-auto flex shrink-0 items-center gap-3">
+        {/* Tighter below sm: the Share button is the one thing a phone's bar
+            can't lose, and at 360px the regular gaps cost it the last few px. */}
+        <div className="ml-auto flex shrink-0 items-center gap-3 max-sm:gap-2">
           <AvatarCluster self={self} peers={peers} />
+          {/* §10.12 — Share is secondary; the label drops to an icon on the
+              narrowest phones, where the bar is already full. */}
+          <Button variant="secondary" size="sm" onClick={() => setSharing(true)}>
+            <Share2 size={16} strokeWidth={1.5} aria-hidden />
+            <span className="max-sm:sr-only">Share</span>
+          </Button>
           {user ? (
             <Button href="/boards" variant="ghost" size="sm">
               My boards
@@ -231,6 +271,13 @@ export function BoardSurface({
           )}
         </div>
       </header>
+
+      <ShareDialog
+        open={sharing}
+        onClose={() => setSharing(false)}
+        boardId={board.id}
+        guest={!user}
+      />
 
       <ConnectionBar status={status} />
 
@@ -290,6 +337,10 @@ export function BoardSurface({
           {/* Cursors paint above the work they are pointing at. */}
           <PresenceLayer peers={peers} />
         </CameraLayer>
+
+        <EmptyBoardHint doc={doc} hydrated={hydrated} boardId={board.id} />
+
+        <ZoomControl store={viewport} actions={camera} />
 
         <Toolbar
           value={tools.tool}
