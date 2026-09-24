@@ -11,7 +11,10 @@
 import { memo } from "react";
 import type * as Y from "yjs";
 import { bboxOf } from "@/lib/board/geometry";
-import { useElement, useElementMap } from "@/lib/realtime/useElements";
+import type { PreviewStore } from "@/lib/board/preview";
+import { useShownElement } from "@/lib/board/useShownElement";
+import type { ElementSnapshot } from "@/lib/realtime/doc-schema";
+import { useElementMap } from "@/lib/realtime/useElements";
 import { NoteView } from "./elements/NoteView";
 import { PathView } from "./elements/PathView";
 import { ShapeView } from "./elements/ShapeView";
@@ -35,6 +38,7 @@ function ElementViewInner({
   dragging,
   onEndEdit,
   settling,
+  preview = null,
 }: {
   doc: Y.Doc;
   id: string;
@@ -48,14 +52,19 @@ function ElementViewInner({
    * so it would pop in seconds after it appeared.
    */
   settling: boolean;
+  /** A resize or draw-out in progress shows its frame-rate box here (preview.ts). */
+  preview?: PreviewStore | null;
 }) {
-  const el = useElement(doc, id);
+  const resolved = useShownElement(doc, id, preview);
   const map = useElementMap(doc, id);
 
   // Deleted while we were rendering it — by a peer, or by an undo.
-  if (!el || !map) return null;
+  if (!resolved || !map) return null;
 
-  const box = bboxOf(el);
+  // Every view below reads its geometry from `shown`, never from `el` — see
+  // useShownElement for what the two differ by.
+  const { el, shown } = resolved;
+  const box = bboxOf(shown);
 
   return (
     <div
@@ -73,14 +82,15 @@ function ElementViewInner({
         width: box.w,
         height: box.h,
         animationDelay: settling ? `${Math.min(index, MAX_STAGGERED) * STAGGER_MS}ms` : undefined,
-        // Skip the work of painting elements scrolled far off screen.
-        contentVisibility: "auto",
-        containIntrinsicSize: `${Math.max(box.w, 1)}px ${Math.max(box.h, 1)}px`,
+        // No content-visibility or `contain: paint` here, tempting as skipping
+        // off-screen paint is: both clip to this box, and ink routinely runs
+        // past it — the outer half of every centred outline, an arrowhead at
+        // the box edge, a stroke's tip drawn ahead of the box the doc knows.
       }}
     >
       {el.kind === "note" ? (
         <NoteView
-          el={el}
+          el={shown}
           map={map}
           doc={doc}
           editing={editing}
@@ -88,14 +98,28 @@ function ElementViewInner({
           dragging={dragging}
         />
       ) : el.kind === "text" ? (
-        <TextView el={el} map={map} doc={doc} editing={editing} onEndEdit={onEndEdit} />
+        <TextView el={shown} map={map} doc={doc} editing={editing} onEndEdit={onEndEdit} />
       ) : el.kind === "path" ? (
-        <PathView el={el} map={map} />
+        <PathView el={shown} map={map} stretch={stretchOf(el, shown)} />
       ) : (
-        <ShapeView el={el} />
+        <ShapeView el={shown} />
       )}
     </div>
   );
+}
+
+/**
+ * How far a stroke's samples must stretch to fill the box being shown.
+ *
+ * The samples in the document match the document's box. While something else
+ * is being shown — a resize not yet written — they are scaled to fit rather
+ * than rewritten, and snap back to 1 when the document catches up.
+ */
+function stretchOf(doc: ElementSnapshot, shown: ElementSnapshot): { x: number; y: number } {
+  return {
+    x: doc.w > 0 ? shown.w / doc.w : 1,
+    y: doc.h > 0 ? shown.h / doc.h : 1,
+  };
 }
 
 // Every prop is a primitive or stable, so this bails out for the elements a

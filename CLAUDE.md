@@ -72,7 +72,7 @@ lives in `front-end/src/lib/realtime/doc-schema.ts`; every write goes through
 the `LOCAL` origin. What's left for the roadmap is Phase 2, the native app — see
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
-Four things worth knowing before touching this seam:
+Five things worth knowing before touching this seam:
 
 - **A `Y.Map`'s own observer does not fire for changes inside a nested `Y.Text`
   or `Y.Array`,** and a *deleted* type's observer never fires at all. So an
@@ -83,10 +83,17 @@ Four things worth knowing before touching this seam:
   transform and `--cam-scale` from a rAF, so a wheel tick doesn't reconcile
   every element — and, more importantly, remote cursors share that one transform
   rather than landing a frame behind it.
-- **Local rendering runs at animation rate; the network never does.** Drags and
-  strokes paint every frame but only write to the doc every `PUBLISH_MS` (50ms).
-  Socket.IO sends a binary event as two frames and nothing rate-limits sockets,
-  so writing per sample would be ~120 frames/sec per person drawing.
+- **Local rendering runs at animation rate; the network never does.** Moves,
+  resizes, draw-outs and pen strokes paint every frame but only write to the doc
+  every `PUBLISH_MS` (50ms). Socket.IO sends a binary event as two frames and
+  nothing rate-limits sockets, so writing per sample would be ~120 frames/sec per
+  person drawing. Resize and draw-out paint through `src/lib/board/preview.ts`;
+  anything that draws an element's geometry reads `useShownElement`, which also
+  eases a *peer's* changes in (never your own).
+- **Element wrappers must not use `content-visibility` or `contain: paint`.**
+  Both clip to the element's box, and ink routinely runs past it — the outer
+  half of every centred outline, arrowheads, a stroke's tip drawn ahead of the
+  box the doc knows.
 - **React registers `wheel` as a passive listener,** so `preventDefault()` in an
   `onWheel` prop does nothing. Zoom is a native listener with `passive: false`.
 

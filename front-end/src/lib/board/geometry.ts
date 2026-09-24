@@ -57,6 +57,38 @@ export function bboxOf(
   return normalizeRect({ x: el.x, y: el.y }, { x: el.x + el.w, y: el.y + el.h });
 }
 
+/**
+ * The fields an element holds once it is fitted to `rect`, a new bounding box,
+ * and how far a stroke's samples stretch to get there.
+ *
+ * For everything but a path this is just the rect. A path's anchor is not the
+ * top-left of its box — `bx`/`by` offset it — and a resize scales that offset
+ * along with the samples, so the anchor has to move by the scaled offset or a
+ * stroke drawn up or to the left lands off to one side of where it was put.
+ *
+ * Shared by resizeElement and the gesture preview, so what a resize shows while
+ * dragging and what it writes when it lands cannot disagree.
+ */
+export function resizedFields(
+  el: Pick<ElementSnapshot, "kind" | "w" | "h" | "bx" | "by">,
+  rect: Rect,
+): Rect & { bx: number; by: number; scaleX: number; scaleY: number } {
+  // A stroke with no width or no height has nothing to scale along that axis;
+  // scaling the other alone would distort it, so neither is scaled.
+  const stretches = el.kind === "path" && el.w > 0 && el.h > 0;
+  const scaleX = stretches ? rect.w / el.w : 1;
+  const scaleY = stretches ? rect.h / el.h : 1;
+  const bx = el.bx * scaleX;
+  const by = el.by * scaleY;
+  return { x: rect.x - bx, y: rect.y - by, w: rect.w, h: rect.h, bx, by, scaleX, scaleY };
+}
+
+/** An element as it will be once resizeElement fits it to `rect`. */
+export function fitElement(el: ElementSnapshot, rect: Rect): ElementSnapshot {
+  const { x, y, w, h, bx, by } = resizedFields(el, rect);
+  return { ...el, x, y, w, h, bx, by };
+}
+
 export function unionRects(rects: readonly Rect[]): Rect | null {
   if (rects.length === 0) return null;
   let minX = Infinity;

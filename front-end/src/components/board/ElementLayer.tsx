@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import type * as Y from "yjs";
 import { repairOrder } from "@/lib/board/elements";
+import type { PreviewStore } from "@/lib/board/preview";
 import { useElementIds } from "@/lib/realtime/useElements";
 import { ElementView } from "./ElementView";
 
@@ -14,6 +15,7 @@ export function ElementLayer({
   draggingIds,
   onEndEdit,
   hydrated,
+  preview,
 }: {
   doc: Y.Doc;
   editingId: string | null;
@@ -21,6 +23,7 @@ export function ElementLayer({
   onEndEdit: () => void;
   /** The §7 settle signal from useBoardDoc. */
   hydrated: boolean;
+  preview: PreviewStore;
 }) {
   const ids = useElementIds(doc);
 
@@ -51,6 +54,7 @@ export function ElementLayer({
           dragging={draggingIds.includes(id)}
           onEndEdit={onEndEdit}
           settling={settleBatch?.has(id) ?? false}
+          preview={preview}
         />
       ))}
     </>

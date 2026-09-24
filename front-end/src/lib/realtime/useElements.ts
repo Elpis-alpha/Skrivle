@@ -25,6 +25,21 @@ const idsCache = new WeakMap<Y.Doc, readonly string[]>();
 const elementCache = new WeakMap<Y.Map<unknown>, ElementSnapshot>();
 const textCache = new WeakMap<Y.Text, string>();
 
+/** Whether the latest change to an element's map came from a peer. */
+const lastChangeRemote = new WeakMap<Y.Map<unknown>, boolean>();
+/** Snapshots built from a change a peer made, rather than one made here. */
+const peerSnapshots = new WeakSet<ElementSnapshot>();
+
+/**
+ * Whether this snapshot is the result of a peer's change.
+ *
+ * Our own gestures already paint at frame rate, but a peer's arrive in
+ * PUBLISH_MS steps, and only those need smoothing. `transaction.local` is false
+ * for exactly what Y.applyUpdate brought in, whatever origin it was tagged
+ * with — an undo, by contrast, is local.
+ */
+export const changedByPeer = (el: ElementSnapshot): boolean => peerSnapshots.has(el);
+
 // Module-level constants: useSyncExternalStore compares by identity, so a fresh
 // literal from getSnapshot would loop React forever.
 const EMPTY_IDS: readonly string[] = Object.freeze([]);
@@ -82,22 +97,25 @@ export function useElement(doc: Y.Doc | null, id: string): ElementSnapshot | nul
       const els = elements(doc);
       let bound = els.get(id) ?? null;
 
-      const fire = () => {
-        if (bound) elementCache.delete(bound);
+      const fire = (_event?: unknown, transaction?: Y.Transaction) => {
+        if (bound) {
+          elementCache.delete(bound);
+          if (transaction) lastChangeRemote.set(bound, !transaction.local);
+        }
         onChange();
       };
 
       // An element can be replaced rather than merely changed — undoing a
       // delete puts a different Y.Map at the same id — so the subscription has
       // to follow it.
-      const onParentChange = () => {
+      const onParentChange = (event: unknown, transaction: Y.Transaction) => {
         const next = els.get(id) ?? null;
         if (next !== bound) {
           bound?.unobserve(fire);
           bound = next;
           bound?.observe(fire);
         }
-        fire();
+        fire(event, transaction);
       };
 
       bound?.observe(fire);
@@ -118,6 +136,7 @@ export function useElement(doc: Y.Doc | null, id: string): ElementSnapshot | nul
     if (!cached) {
       cached = readElement(id, map);
       elementCache.set(map, cached);
+      if (lastChangeRemote.get(map)) peerSnapshots.add(cached);
     }
     return cached;
   }, [doc, id]);

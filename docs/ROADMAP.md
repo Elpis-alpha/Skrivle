@@ -36,6 +36,20 @@ Goal: the four success criteria in [PROJECT_BRIEF.md](../PROJECT_BRIEF.md) are m
 - [x] `coming-soon` page + deployment
 - [x] Public demo URL — `back-end` deployed to `api.skrivle.elpis.cc` (Docker + Nginx); the canvas at `skrivle.elpis.cc` is live end to end
 
+## Phase 1.5 — Board polish
+
+v1 works; this pass is about what a visitor sees in their first minute on a
+board. Front-end only — no doc schema or wire-format changes.
+
+- [x] Ink keeps up with the pointer: pen, resize and draw-out paint every frame
+- [x] A peer's moves and resizes ease in instead of landing in 50ms steps
+- [x] Tapered pen ink; shape outlines no longer clipped to their box
+- [ ] Share button + dialog, inline title rename, toasts
+- [ ] Zoom control, fit to content, and fit on load
+- [ ] Empty-board hint
+- [ ] Peers' selections shown on the board
+- [ ] Copy, paste, duplicate
+
 ## Phase 2 — Native app
 
 Not started; no timeline. v1 (Phase 0 + 1) is complete and live.

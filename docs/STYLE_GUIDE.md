@@ -338,6 +338,12 @@ Dark theme: shadows deepen (`rgba(0,0,0,.4/.5)`) **and** raised surfaces get a
 (curves make cursors look like they're stuttering). Name tag fades out after 3s
 idle, fades back in on movement.
 
+**Remote element changes** follow the same rule: when a peer moves or resizes
+something, it closes the gap over ~70ms, linear, so the element travels with the
+cursor dragging it instead of landing in 50ms steps. A stroke eases its position
+but never its size — its ink is drawn the moment it arrives. Your own edits never
+ease; they already paint at frame rate while you make them.
+
 **The board settle (the one orchestrated moment):** on load the canvas is
 `--wg-50` with the dot grid and all elements at 0 opacity. When the Yjs doc is
 ready: background → `--canvas-bg` (200ms), dot grid fades in (200ms), then
@@ -349,7 +355,8 @@ the only place it may be slowed down, and only there.
 
 **`prefers-reduced-motion: reduce`:** skip the settle (elements just appear),
 skip the element stagger and rise, keep opacity/color transitions but drop
-transforms. Cursor interpolation still runs (it's a readability aid, not decor).
+transforms. Cursor and remote-element interpolation still run (they're a
+readability aid, not decor).
 
 ---
 
@@ -446,6 +453,12 @@ dialog says so once, quietly.
 Popover (`--radius-md`, `--elev-2`, 8px padding). Row of the 7 note-palette
 swatches (§2.5) for fills, plus `--ink` and `--accent-500` for strokes. Selected
 swatch has a 2px `--ink` ring. Stroke-width segmented control: 1 / 2 / 4 / 8px.
+
+Pen ink holds the chosen width between two tapered ends (each about six widths
+long), the way ink leaves a nib. The weight is constant between them: it never
+varies with pointer speed, so a stroke looks the same on a 60Hz mouse and a
+240Hz stylus, and does not change weight when it is simplified on release.
+Shapes and lines keep a uniform stroke.
 
 ### 10.7 Sticky note
 

@@ -15,7 +15,7 @@ import { NOTE_COLORS } from "@/lib/presence-colors";
 import { elements, type ElementSnapshot } from "@/lib/realtime/doc-schema";
 import { orderedIds, pointsOf, readElement, textOf } from "./elements";
 import { bboxOf, unionRects } from "./geometry";
-import { toPathData } from "./stroke";
+import { strokeOutline } from "./stroke";
 
 /** 16:10 at 2x the 480px Cloudinary delivers, so the tile stays sharp. */
 export const THUMB_WIDTH = 960;
@@ -117,12 +117,14 @@ export function renderThumbnail(doc: Y.Doc): HTMLCanvasElement | null {
         ctx.stroke();
         break;
       case "path": {
+        // The same filled, tapered outline PathView draws (stroke.ts).
         const samples = pointsOf(map)?.toArray() ?? [];
-        const data = toPathData(samples);
+        const data = strokeOutline(samples, el.strokeWidth);
         if (!data) break;
         ctx.save();
         ctx.translate(el.x, el.y);
-        ctx.stroke(new Path2D(data));
+        ctx.fillStyle = stroke;
+        ctx.fill(new Path2D(data));
         ctx.restore();
         break;
       }

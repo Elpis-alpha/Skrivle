@@ -1,15 +1,28 @@
-// Freehand strokes: raw pointer samples in, an SVG path out.
+// Freehand strokes: raw pointer samples in, SVG path data out.
 //
-// No dependency for this. §10.6 fixes stroke width at 1/2/4/8 and §8 asks for
-// round caps and joins, so there is no variable-width or pressure-tapered
-// rendering to buy in — a smoothed constant-width polyline is the whole
-// requirement.
+// The ink is drawn as a filled outline rather than a stroked centre line, so it
+// can thin and swell the way a pen does. perfect-freehand builds that outline;
+// it is small, dependency-free and — the property that matters here — a pure
+// function of its input, so every peer holding the same samples draws exactly
+// the same ink. §10.6's 1/2/4/8 still picks the stroke's weight; the ends taper
+// to a point the way ink leaves a nib.
+//
+// The weight is constant between the tapers — pressure is neither stored nor
+// simulated. Simulating it from pointer speed was tried and rejected: speed is
+// just the spacing between samples, which makes the ink depend on the device's
+// sample rate, and the simplify() pass that runs when a stroke ends changes the
+// spacing — a finished stroke visibly lost half its weight the moment the pen
+// lifted. Tapers are measured along the stroke's length, which neither
+// affects. The samples stay [x, y] pairs, so every existing snapshot keeps its
+// wire format and an old board's strokes simply redraw with the new ink.
 //
 // Points are a flat [x, y, x, y, …] array of integers, stored relative to the
 // element's origin. Flat because it is one Y.Array whose appends merge into a
 // single Yjs item; integers because lib0 encodes an int in ~3 bytes and a float
 // in 9; relative so that moving a 600-point stroke is two field writes rather
 // than a rewrite of all 1,200 numbers.
+
+import { getStroke } from "perfect-freehand";
 
 /** Beyond this a stroke is a mistake, not a drawing. Guards MAX_UPDATE_BYTES. */
 export const MAX_POINTS = 5000;
@@ -34,37 +47,58 @@ export function pointsBounds(points: readonly number[]): Bounds | null {
   return { minX, minY, maxX, maxY };
 }
 
+const round = (n: number) => Math.round(n * 100) / 100;
+
 /**
- * Smooth the samples into an SVG path.
+ * The outline of a stroke's ink, as path data to fill.
  *
- * Each sample becomes the *control* point of a quadratic, and the curve passes
- * through the midpoints between samples. That rounds off pointer jitter without
- * any windowing or averaging, and it stays a pure function of the points — so a
- * peer receiving half a stroke draws exactly the same curve we do for that half.
+ * `width` is the §10.6 weight, which the ink holds between its tapered ends.
  */
-export function toPathData(points: readonly number[]): string {
-  if (points.length < 2) return "";
-
-  const x = (i: number) => points[i * 2];
-  const y = (i: number) => points[i * 2 + 1];
+export function strokeOutline(points: readonly number[], width: number): string {
   const count = Math.floor(points.length / 2);
+  if (count === 0) return "";
 
-  // A single sample is a dot. A zero-length subpath renders as one under
-  // stroke-linecap: round, which is what a tap on the canvas should leave.
-  if (count === 1) return `M ${x(0)} ${y(0)} L ${x(0)} ${y(0)}`;
-  if (count === 2) return `M ${x(0)} ${y(0)} L ${x(1)} ${y(1)}`;
+  const pairs: [number, number][] = [];
+  for (let i = 0; i < count; i++) pairs.push([points[i * 2], points[i * 2 + 1]]);
 
-  const parts = [`M ${x(0)} ${y(0)}`];
-  for (let i = 1; i < count - 1; i++) {
-    const midX = round((x(i) + x(i + 1)) / 2);
-    const midY = round((y(i) + y(i + 1)) / 2);
-    parts.push(`Q ${x(i)} ${y(i)} ${midX} ${midY}`);
+  const size = width + INK_FLOOR;
+  const taper = { taper: size * TAPER_PER_SIZE, cap: true };
+  const outline = getStroke(pairs, {
+    size,
+    smoothing: 0.5,
+    streamline: 0.4,
+    simulatePressure: false,
+    start: taper,
+    end: taper,
+    // Treated as finished. A stroke still being drawn gets the same round end,
+    // which is what the pen tip looks like under the pointer anyway — and it
+    // keeps this a function of the samples alone, with no "done" flag to sync.
+    last: true,
+  });
+  if (outline.length === 0) return "";
+
+  // Each outline point becomes a quadratic control point with the curve
+  // passing through the midpoints between them — the same smoothing toPathData
+  // uses, closed back to the start.
+  const parts = [`M ${round(outline[0][0])} ${round(outline[0][1])} Q`];
+  for (let i = 0; i < outline.length; i++) {
+    const [x0, y0] = outline[i];
+    const [x1, y1] = outline[(i + 1) % outline.length];
+    parts.push(`${round(x0)} ${round(y0)} ${round((x0 + x1) / 2)} ${round((y0 + y1) / 2)}`);
   }
-  parts.push(`L ${x(count - 1)} ${y(count - 1)}`);
+  parts.push("Z");
   return parts.join(" ");
 }
 
-const round = (n: number) => Math.round(n * 100) / 100;
+/**
+ * Added to the §10.6 weight: tapered ends pull a stroke's average weight a
+ * little under its width, and this brings it back, while keeping a 1px stroke's
+ * tapers from thinning to nothing.
+ */
+const INK_FLOOR = 0.5;
+
+/** How long each tapered end is, in multiples of the ink's width. */
+const TAPER_PER_SIZE = 6;
 
 /**
  * Ramer–Douglas–Peucker, run once on pointerup.

@@ -23,6 +23,7 @@ import type { BoardWithRole } from "@/lib/api/types";
 import { displayNameFor } from "@/lib/board/guest-name";
 import { readElement, removeElements, updateElement } from "@/lib/board/elements";
 import { isChrome, isTypingTarget, useBoardGestures } from "@/lib/board/useBoardGestures";
+import { createPreviewStore } from "@/lib/board/preview";
 import { useBoardTools } from "@/lib/board/useBoardTools";
 import { useThumbnail } from "@/lib/board/useThumbnail";
 import {
@@ -61,6 +62,7 @@ export function BoardSurface({
   // One store for the component's life. Created lazily so StrictMode's double
   // render doesn't make two of them.
   const [viewport] = useState(createViewportStore);
+  const [preview] = useState(createPreviewStore);
   const [grabbing, setGrabbing] = useState(false);
   const [tools, dispatch] = useReducer(toolReducer, INITIAL_TOOL_STATE);
 
@@ -126,6 +128,7 @@ export function BoardSurface({
     state: tools,
     dispatch,
     onGestureStart: stopCapturing,
+    preview,
   });
 
   useBoardGestures({
@@ -273,8 +276,14 @@ export function BoardSurface({
                 draggingIds={draggingIds}
                 onEndEdit={endEdit}
                 hydrated={hydrated}
+                preview={preview}
               />
-              <SelectionLayer doc={doc} ids={tools.selection} marqueeRef={marqueeRef} />
+              <SelectionLayer
+                doc={doc}
+                ids={tools.selection}
+                marqueeRef={marqueeRef}
+                preview={preview}
+              />
             </>
           ) : null}
 

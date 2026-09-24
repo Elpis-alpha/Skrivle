@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_POINTS, pointsBounds, simplify, toPathData } from "./stroke";
+import { MAX_POINTS, pointsBounds, simplify, strokeOutline } from "./stroke";
 
 describe("pointsBounds", () => {
   it("is null with nothing to bound", () => {
@@ -13,41 +13,6 @@ describe("pointsBounds", () => {
       maxX: 20,
       maxY: 30,
     });
-  });
-});
-
-describe("toPathData", () => {
-  it("is empty with nothing to draw", () => {
-    expect(toPathData([])).toBe("");
-  });
-
-  // A tap should leave a dot: a zero-length subpath renders as one under
-  // stroke-linecap: round.
-  it("renders a single sample as a zero-length subpath", () => {
-    expect(toPathData([4, 7])).toBe("M 4 7 L 4 7");
-  });
-
-  it("renders two samples as a straight line", () => {
-    expect(toPathData([0, 0, 10, 10])).toBe("M 0 0 L 10 10");
-  });
-
-  // Each sample is the CONTROL point; the curve passes through the midpoints.
-  it("smooths through midpoints with each sample as a control point", () => {
-    expect(toPathData([0, 0, 10, 0, 20, 0])).toBe("M 0 0 Q 10 0 15 0 L 20 0");
-  });
-
-  it("starts at the first sample and ends at the last", () => {
-    const d = toPathData([1, 2, 30, 40, 50, 60, 70, 80]);
-    expect(d.startsWith("M 1 2")).toBe(true);
-    expect(d.endsWith("L 70 80")).toBe(true);
-  });
-
-  // A peer receiving half a stroke must draw exactly the same curve for that
-  // half, so this has to be a pure function of the points with no windowing.
-  it("is a prefix-stable function of the points", () => {
-    const all = [0, 0, 10, 5, 20, 0, 30, 5, 40, 0];
-    const half = all.slice(0, 6);
-    expect(toPathData(all).startsWith(toPathData(half).split(" L ")[0])).toBe(true);
   });
 });
 
@@ -90,5 +55,84 @@ describe("simplify", () => {
     const noisy: number[] = [];
     for (let i = 0; i < 200; i++) noisy.push(i, Math.round(Math.sin(i) * 10));
     expect(simplify(noisy).length % 2).toBe(0);
+  });
+});
+
+describe("strokeOutline", () => {
+  const zigzag = [0, 0, 20, 10, 40, 0, 60, 12, 80, 0];
+
+  it("draws nothing for no samples", () => {
+    expect(strokeOutline([], 2)).toBe("");
+  });
+
+  it("fills a closed shape — the ink's outline, not a line through its middle", () => {
+    const d = strokeOutline(zigzag, 2);
+    expect(d.startsWith("M")).toBe(true);
+    expect(d.endsWith("Z")).toBe(true);
+  });
+
+  it("leaves a dot for a single tap", () => {
+    expect(strokeOutline([5, 5], 4)).toMatch(/^M .+ Z$/);
+  });
+
+  // A peer holding the same samples must draw exactly the ink we do.
+  it("is a pure function of the samples", () => {
+    expect(strokeOutline(zigzag, 4)).toBe(strokeOutline([...zigzag], 4));
+  });
+
+  it("is wider for a wider stroke", () => {
+    const spanY = (d: string) => {
+      const ys = [...d.matchAll(/(-?[\d.]+) (-?[\d.]+)/g)].map((m) => Number(m[2]));
+      return Math.max(...ys) - Math.min(...ys);
+    };
+    const flat = [0, 0, 40, 0, 80, 0];
+    expect(spanY(strokeOutline(flat, 8))).toBeGreaterThan(spanY(strokeOutline(flat, 1)));
+  });
+
+  // Weight as ink area over centre-line length, from the outline's polygon.
+  const weight = (points: number[], width: number) => {
+    const xy = [...strokeOutline(points, width).matchAll(/(-?[\d.]+) (-?[\d.]+)/g)].map((m) => [
+      Number(m[1]),
+      Number(m[2]),
+    ]);
+    let area = 0;
+    for (let i = 0; i < xy.length; i++) {
+      const [x0, y0] = xy[i];
+      const [x1, y1] = xy[(i + 1) % xy.length];
+      area += x0 * y1 - x1 * y0;
+    }
+    let length = 0;
+    for (let i = 2; i < points.length; i += 2) {
+      length += Math.hypot(points[i] - points[i - 2], points[i + 1] - points[i - 1]);
+    }
+    return Math.abs(area / 2) / length;
+  };
+
+  // A hand-drawn wave sampled densely, like a 120Hz pointer.
+  const wave: number[] = [];
+  for (let i = 0; i < 240; i++) {
+    const t = i / 239;
+    wave.push(Math.round(t * 600), Math.round(Math.sin(t * 5) * 80));
+  }
+
+  // Simplification runs when a stroke ends; the ink must not visibly thin or
+  // swell at that moment, for us or for anyone watching.
+  it("keeps its weight when the finished stroke is simplified", () => {
+    const before = weight(wave, 4);
+    const after = weight(simplify(wave), 4);
+    expect(Math.abs(after / before - 1)).toBeLessThan(0.08);
+  });
+
+  // A 240Hz stylus and a 60Hz mouse drawing the same line should leave the
+  // same ink.
+  it("weighs the same however densely the pointer was sampled", () => {
+    const sparse = wave.filter((_, i) => Math.floor(i / 2) % 4 === 0);
+    expect(Math.abs(weight(sparse, 4) / weight(wave, 4) - 1)).toBeLessThan(0.08);
+  });
+
+  it("averages close to the weight the picker shows", () => {
+    for (const width of [1, 2, 4, 8]) {
+      expect(Math.abs(weight(wave, width) - width)).toBeLessThan(0.75);
+    }
   });
 });

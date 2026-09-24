@@ -22,7 +22,7 @@ import {
   type StrokeWidth,
 } from "@/lib/realtime/doc-schema";
 import { LOCAL } from "@/lib/realtime/board-session";
-import { bboxOf, type Rect } from "./geometry";
+import { resizedFields, type Rect } from "./geometry";
 import { MAX_POINTS } from "./stroke";
 
 export type ElementMap = Y.Map<unknown>;
@@ -216,22 +216,27 @@ export function resizeElement(doc: Y.Doc, id: string, rect: Rect): void {
   if (!map) return;
 
   doc.transact(() => {
-    const before = bboxOf(readElement(id, map));
+    const next = resizedFields(readElement(id, map), rect);
     const points = pointsOf(map);
 
-    if (points && before.w > 0 && before.h > 0) {
-      const scaleX = rect.w / before.w;
-      const scaleY = rect.h / before.h;
-      const scaled = points.toArray().map((n, i) => Math.round(n * (i % 2 === 0 ? scaleX : scaleY)));
+    // Rounded before the anchor is derived from it, so the box lands on the
+    // integer rect it was given rather than drifting by the rounding.
+    const bx = Math.round(next.bx);
+    const by = Math.round(next.by);
+
+    if (points && (next.scaleX !== 1 || next.scaleY !== 1)) {
+      const scaled = points
+        .toArray()
+        .map((n, i) => Math.round(n * (i % 2 === 0 ? next.scaleX : next.scaleY)));
       points.delete(0, points.length);
       points.push(scaled);
 
-      map.set("bx", Math.round(num(map.get("bx"), 0) * scaleX));
-      map.set("by", Math.round(num(map.get("by"), 0) * scaleY));
+      map.set("bx", bx);
+      map.set("by", by);
     }
 
-    map.set("x", Math.round(rect.x));
-    map.set("y", Math.round(rect.y));
+    map.set("x", Math.round(rect.x) - (points ? bx : 0));
+    map.set("y", Math.round(rect.y) - (points ? by : 0));
     map.set("w", Math.round(rect.w));
     map.set("h", Math.round(rect.h));
   }, LOCAL);

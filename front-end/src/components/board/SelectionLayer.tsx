@@ -12,7 +12,8 @@
 
 import type * as Y from "yjs";
 import { bboxOf, handlePosition, HANDLES, type Handle } from "@/lib/board/geometry";
-import { useElement } from "@/lib/realtime/useElements";
+import type { PreviewStore } from "@/lib/board/preview";
+import { useShownElement } from "@/lib/board/useShownElement";
 
 /** §10.7 — 6px squares. Counter-scaled, so this is screen pixels. */
 const HANDLE_PX = 6;
@@ -21,17 +22,25 @@ export function SelectionLayer({
   doc,
   ids,
   marqueeRef,
+  preview = null,
 }: {
   doc: Y.Doc;
   ids: readonly string[];
   marqueeRef: React.RefObject<HTMLDivElement | null>;
+  preview?: PreviewStore | null;
 }) {
   return (
     <>
       {ids.map((id) => (
         // Handles are only offered for a single selection: there is nothing
         // sensible for one grip to do to six elements at once.
-        <SelectionBox key={id} doc={doc} id={id} withHandles={ids.length === 1} />
+        <SelectionBox
+          key={id}
+          doc={doc}
+          id={id}
+          withHandles={ids.length === 1}
+          preview={preview}
+        />
       ))}
 
       <div
@@ -51,14 +60,18 @@ function SelectionBox({
   doc,
   id,
   withHandles,
+  preview,
 }: {
   doc: Y.Doc;
   id: string;
   withHandles: boolean;
+  preview: PreviewStore | null;
 }) {
-  const el = useElement(doc, id);
-  if (!el) return null;
+  // The same box the element itself is drawn at, so the outline can't lag it.
+  const resolved = useShownElement(doc, id, preview);
+  if (!resolved) return null;
 
+  const el = resolved.shown;
   const box = bboxOf(el);
   const handles: readonly Handle[] = el.kind === "line" ? ["nw", "se"] : HANDLES;
 

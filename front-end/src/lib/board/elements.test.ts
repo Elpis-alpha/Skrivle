@@ -310,6 +310,16 @@ describe("resizeElement", () => {
     expect(after).toMatchObject({ bx: -80, by: -20 });
   });
 
+  it("puts a resized backwards stroke's box exactly where it was asked to go", () => {
+    const id = createElement(doc, { ...rect, kind: "path", w: 0, h: 0, points: [0, 0] });
+    appendPoints(doc, id, [-40, -20]);
+    const before = bboxOf(readElement(id, elements(doc).get(id)!));
+
+    resizeElement(doc, id, { x: before.x, y: before.y, w: 80, h: 20 });
+    const after = bboxOf(readElement(id, elements(doc).get(id)!));
+    expect(after).toEqual({ x: before.x, y: before.y, w: 80, h: 20 });
+  });
+
   // Path samples are relative to the origin, so they scale with the box.
   it("scales a stroke's samples with it", () => {
     const id = createElement(doc, {

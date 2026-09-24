@@ -14,10 +14,8 @@
 
 import { useEffect, useRef } from "react";
 import { CursorArrow } from "@/components/board/CursorArrow";
+import { approach } from "@/lib/board/motion";
 import type { PresencePeer } from "@/lib/realtime/presence";
-
-/** §7: interpolate over ~70ms LINEARLY — an easing curve makes cursors stutter. */
-const INTERPOLATE_MS = 70;
 
 /** §7: the name tag fades out after 3s idle and returns on movement. */
 const IDLE_MS = 3000;
@@ -45,9 +43,6 @@ export function PresenceLayer({ peers }: { peers: PresencePeer[] }) {
     const tick = (now: number) => {
       const dt = now - last;
       last = now;
-      // Linear approach to the target: a fixed fraction of the remaining gap
-      // per frame, sized so a cursor closes it in about INTERPOLATE_MS.
-      const t = Math.min(1, dt / INTERPOLATE_MS);
 
       for (const peer of peersRef.current) {
         const tracked = nodes.current.get(peer.clientId);
@@ -56,8 +51,10 @@ export function PresenceLayer({ peers }: { peers: PresencePeer[] }) {
         const target = peer.cursor;
         // First sighting: land on the spot rather than flying in from 0,0.
         tracked.current ??= { x: target.x, y: target.y };
-        tracked.current.x += (target.x - tracked.current.x) * t;
-        tracked.current.y += (target.y - tracked.current.y) * t;
+        // §7 — the same approach a peer's dragged element takes (motion.ts),
+        // so the cursor and what it is dragging travel together.
+        tracked.current.x = approach(tracked.current.x, target.x, dt);
+        tracked.current.y = approach(tracked.current.y, target.y, dt);
 
         tracked.root.style.transform = `translate3d(${tracked.current.x}px, ${tracked.current.y}px, 0)`;
 

@@ -34,7 +34,8 @@ import {
   type Point,
   type Rect,
 } from "./geometry";
-import { MAX_POINTS, simplify } from "./stroke";
+import type { PreviewStore } from "./preview";
+import { MAX_POINTS, simplify, strokeOutline } from "./stroke";
 import { elements, type ElementSnapshot } from "@/lib/realtime/doc-schema";
 import { PUBLISH_MS } from "@/lib/realtime/board-session";
 import type { BeginDrag, DragHandlers } from "./useBoardGestures";
@@ -59,6 +60,7 @@ export function useBoardTools({
   state,
   dispatch,
   onGestureStart,
+  preview,
 }: {
   doc: Y.Doc | null;
   hostRef: RefObject<HTMLElement | null>;
@@ -69,6 +71,8 @@ export function useBoardTools({
   dispatch: (action: ToolAction) => void;
   /** Closes the open undo entry, so each gesture is exactly one Cmd+Z. */
   onGestureStart: () => void;
+  /** Where resize and draw-out show their frame-rate box (see preview.ts). */
+  preview: PreviewStore;
 }): { begin: BeginDrag; draggingIds: readonly string[] } {
   // §10.7 — a note takes --elev-1 only while it is being dragged. State rather
   // than a ref because it has to reach the note, and it changes twice per drag
@@ -109,10 +113,10 @@ export function useBoardTools({
         return null;
       }
 
-      if (tool === "pen") return beginStroke(doc, start, style, dispatch);
+      if (tool === "pen") return beginStroke(doc, start, style, dispatch, host);
 
       if (tool === "rect" || tool === "ellipse" || tool === "line" || tool === "text") {
-        return beginDrawOut(doc, start, tool, style, dispatch);
+        return beginDrawOut(doc, start, tool, style, dispatch, preview);
       }
 
       // --- Select --------------------------------------------------------
@@ -122,7 +126,7 @@ export function useBoardTools({
       // sits over the note itself, and grabbing it must not just move the note.
       const handle = handleUnder(start, all, selection, scale);
       if (handle) {
-        return beginResize(doc, handle.id, handle.handle, all);
+        return beginResize(doc, handle.id, handle.handle, all, preview);
       }
 
       const hit = topmostAt(all, start, scale, pointsFor);
@@ -149,7 +153,7 @@ export function useBoardTools({
       setDraggingIds(moving);
       return beginMove(doc, moving, start, host, () => setDraggingIds(NOTHING));
     },
-    [doc, hostRef, marqueeRef, store, state, dispatch, onGestureStart],
+    [doc, hostRef, marqueeRef, store, state, dispatch, onGestureStart, preview],
   );
 
   return { begin, draggingIds };
@@ -192,16 +196,19 @@ function handleUnder(
  * the wrapper for real and the transform is zeroed in the same tick, so the two
  * never double-count.
  */
-function beginMove(
+export function beginMove(
   doc: Y.Doc,
   ids: readonly string[],
   start: Point,
   host: HTMLElement,
   onDone: () => void,
 ): DragHandlers {
-  const nodes = ids
-    .map((id) => host.querySelector<HTMLElement>(`[data-element-id="${CSS.escape(id)}"]`))
-    .filter((node): node is HTMLElement => node !== null);
+  // Every node drawn for the element — the element itself and, when it is
+  // selected, its outline — so the outline doesn't trail behind at the
+  // document's cadence while the element keeps up with the pointer.
+  const nodes = ids.flatMap((id) => [
+    ...host.querySelectorAll<HTMLElement>(`[data-element-id="${CSS.escape(id)}"]`),
+  ]);
 
   let total: Point = { x: 0, y: 0 };
   let flushed: Point = { x: 0, y: 0 };
@@ -249,36 +256,59 @@ function beginMove(
   };
 }
 
-function beginResize(
+/**
+ * Resize one element.
+ *
+ * Same two clocks as a move: the preview store shows the new box every frame,
+ * and the document catches up every PUBLISH_MS. The preview is cleared in the
+ * same tick as the last write, so the element never shows the doc's older box
+ * in between.
+ */
+export function beginResize(
   doc: Y.Doc,
   id: string,
   handle: Handle,
   all: readonly ElementSnapshot[],
+  preview: PreviewStore,
 ): DragHandlers | null {
   const el = all.find((candidate) => candidate.id === id);
   if (!el) return null;
   const original = bboxOf(el);
 
   let latest: Rect = original;
+  let frame = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const paint = () => {
+    frame = 0;
+    preview.set(id, latest);
+  };
 
   const flush = () => {
     timer = null;
     resizeElement(doc, id, latest);
   };
 
+  const stop = () => {
+    if (frame) cancelAnimationFrame(frame);
+    if (timer) clearTimeout(timer);
+  };
+
   return {
     move(point) {
       latest = resizeRect(original, handle, point);
+      if (!frame) frame = requestAnimationFrame(paint);
       if (!timer) timer = setTimeout(flush, PUBLISH_MS);
     },
     end() {
-      if (timer) clearTimeout(timer);
+      stop();
       flush();
+      preview.clear(id);
     },
     cancel() {
-      if (timer) clearTimeout(timer);
+      stop();
       resizeElement(doc, id, original);
+      preview.clear(id);
     },
   };
 }
@@ -329,12 +359,13 @@ function beginMarquee(
 }
 
 /** Rectangle, circle, line and text box: press, drag out, release. */
-function beginDrawOut(
+export function beginDrawOut(
   doc: Y.Doc,
   start: Point,
   tool: "rect" | "ellipse" | "line" | "text",
   style: ToolState["style"],
   dispatch: (action: ToolAction) => void,
+  preview: PreviewStore,
 ): DragHandlers {
   const id = createElement(doc, {
     kind: tool,
@@ -350,33 +381,44 @@ function beginDrawOut(
     withText: tool === "text",
   });
 
+  // The fields as the document stores them. A line keeps its direction: w/h are
+  // a delta from where it started, so dragging up and left has to stay
+  // negative rather than being normalised.
+  const fieldsFor = (point: Point): Rect =>
+    tool === "line"
+      ? { x: start.x, y: start.y, w: point.x - start.x, h: point.y - start.y }
+      : normalizeRect(start, point);
+
+  // Always the newest pointer position. The timer must read this rather than
+  // close over the point that armed it, or the doc gets an endpoint up to one
+  // publish interval stale.
   let latest: Rect = { x: start.x, y: start.y, w: 0, h: 0 };
+  let frame = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  // A line keeps its direction: w/h are a delta from where it started, so
-  // dragging up and left has to stay negative rather than being normalised.
-  const write = (point: Point) => {
-    resizeElement(
-      doc,
-      id,
-      tool === "line"
-        ? { x: start.x, y: start.y, w: point.x - start.x, h: point.y - start.y }
-        : latest,
-    );
+  const paint = () => {
+    frame = 0;
+    preview.set(id, latest);
+  };
+
+  const stop = () => {
+    if (frame) cancelAnimationFrame(frame);
+    if (timer) clearTimeout(timer);
   };
 
   return {
     move(point) {
-      latest = normalizeRect(start, point);
+      latest = fieldsFor(point);
+      if (!frame) frame = requestAnimationFrame(paint);
       if (!timer) {
         timer = setTimeout(() => {
           timer = null;
-          write(point);
+          resizeElement(doc, id, latest);
         }, PUBLISH_MS);
       }
     },
     end(point) {
-      if (timer) clearTimeout(timer);
+      stop();
       const dragged = Math.hypot(point.x - start.x, point.y - start.y);
 
       if (dragged < CLICK_SLOP) {
@@ -396,24 +438,34 @@ function beginDrawOut(
               },
         );
       } else {
-        write(point);
+        resizeElement(doc, id, fieldsFor(point));
       }
+      preview.clear(id);
 
       dispatch({ type: "created", id });
       if (tool === "text") dispatch({ type: "edit", id });
     },
     cancel() {
-      if (timer) clearTimeout(timer);
+      stop();
+      preview.clear(id);
     },
   };
 }
 
-/** Freehand. Samples buffer locally and go out in batches. */
-function beginStroke(
+/**
+ * Freehand. Samples buffer locally and go out in batches.
+ *
+ * The person drawing sees every sample the frame it arrives: the ink is painted
+ * straight onto the element's <path> from everything drawn so far, published or
+ * not. PathView's observer paints the same outline from the document whenever a
+ * batch lands, so the two only ever agree.
+ */
+export function beginStroke(
   doc: Y.Doc,
   start: Point,
   style: ToolState["style"],
   dispatch: (action: ToolAction) => void,
+  host: HTMLElement,
 ): DragHandlers {
   const id = createElement(doc, {
     kind: "path",
@@ -429,11 +481,30 @@ function beginStroke(
   let buffer: number[] = [];
   let written = 1;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let frame = 0;
+
+  // What the document already holds. Only this gesture writes to this stroke
+  // until it ends, so keeping a copy is exact and saves reading the Y.Array
+  // back every frame.
+  const published: number[] = [0, 0];
+
+  // Looked up per paint rather than once: the element is created above, but
+  // React only mounts its <path> after this handler returns.
+  const ink = () =>
+    host.querySelector<SVGPathElement>(
+      `[data-testid="board-element"][data-element-id="${CSS.escape(id)}"] path`,
+    );
+
+  const paint = () => {
+    frame = 0;
+    ink()?.setAttribute("d", strokeOutline(published.concat(buffer), style.strokeWidth));
+  };
 
   const flush = () => {
     timer = null;
     if (buffer.length === 0) return;
     appendPoints(doc, id, buffer);
+    published.push(...buffer);
     written += buffer.length / 2;
     buffer = [];
   };
@@ -446,9 +517,11 @@ function beginStroke(
       for (const sample of samples) {
         buffer.push(Math.round(sample.x - start.x), Math.round(sample.y - start.y));
       }
+      if (!frame) frame = requestAnimationFrame(paint);
       if (!timer) timer = setTimeout(flush, PUBLISH_MS);
     },
     end() {
+      if (frame) cancelAnimationFrame(frame);
       if (timer) clearTimeout(timer);
       flush();
 
@@ -465,6 +538,7 @@ function beginStroke(
       dispatch({ type: "created", id });
     },
     cancel() {
+      if (frame) cancelAnimationFrame(frame);
       if (timer) clearTimeout(timer);
       flush();
     },
