@@ -113,6 +113,15 @@ test("the Share button hands over the board's link", async ({ page, context }) =
 
   await expect(page.getByRole("status")).toHaveText("Link copied");
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(url);
+
+  // Not just rendered — on top, where it can be read, not under the dialog's
+  // blurred scrim.
+  const onTop = await page.getByText("Link copied").evaluate((toast) => {
+    const box = toast.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+    return hit !== null && toast.contains(hit);
+  });
+  expect(onTop).toBe(true);
 });
 
 test("the zoom control and its keys move the camera", async ({ page }) => {

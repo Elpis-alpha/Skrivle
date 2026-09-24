@@ -7,8 +7,9 @@ import { ZoomControl } from "./ZoomControl";
 function renderControl() {
   const store = createViewportStore();
   const actions = { zoomIn: vi.fn(), zoomOut: vi.fn(), resetZoom: vi.fn(), fit: vi.fn() };
-  render(<ZoomControl store={store} actions={actions} />);
-  return { store, actions };
+  const onPointerDone = vi.fn();
+  render(<ZoomControl store={store} actions={actions} onPointerDone={onPointerDone} />);
+  return { store, actions, onPointerDone };
 }
 
 describe("ZoomControl", () => {
@@ -34,5 +35,20 @@ describe("ZoomControl", () => {
     expect(actions.zoomOut).toHaveBeenCalledOnce();
     expect(actions.resetZoom).toHaveBeenCalledOnce();
     expect(actions.fit).toHaveBeenCalledOnce();
+  });
+
+  // The tool keys live on the canvas; a mouse click on a zoom button shouldn't
+  // leave them dead until the canvas is clicked again. Keyboard users keep
+  // their place.
+  it("hands focus back after a click, but not after a key press", async () => {
+    const user = userEvent.setup();
+    const { onPointerDone } = renderControl();
+
+    await user.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(onPointerDone).toHaveBeenCalledOnce();
+
+    screen.getByRole("button", { name: "Zoom out" }).focus();
+    await user.keyboard("{Enter}");
+    expect(onPointerDone).toHaveBeenCalledOnce();
   });
 });

@@ -62,8 +62,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={toaster}>
       {children}
 
-      {/* Above the floating toolbar (bottom-6 + its ~48px), never over it. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-60 flex justify-center px-4">
+      {/* Above the floating toolbar (bottom-6 + its ~48px), never over it —
+          and above a dialog's scrim (z-70), since a dialog is often what
+          raised the toast: "Link copied" is no use blurred behind it. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-80 flex justify-center px-4">
         {/* The polite region is always in the DOM so screen readers are
             already listening when a message lands in it; an error is
             announced assertively on its own, as it appears. */}

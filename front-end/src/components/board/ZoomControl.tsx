@@ -25,9 +25,16 @@ const BUTTON =
 export function ZoomControl({
   store,
   actions,
+  onPointerDone,
 }: {
   store: ViewportStore;
   actions: CameraActions;
+  /**
+   * After a mouse or touch press — not a key press — so the board can take
+   * focus back for its tool keys, the way the toolbar does. A keyboard user
+   * stays on the button they were using.
+   */
+  onPointerDone?: () => void;
 }) {
   const scale = useSyncExternalStore(
     store.subscribe,
@@ -35,6 +42,13 @@ export function ZoomControl({
     () => 1,
   );
   const percent = `${Math.round(scale * 100)}%`;
+
+  // A click's `detail` counts the presses behind it; one fired from Enter or
+  // Space has none.
+  const press = (action: () => void) => (event: React.MouseEvent) => {
+    action();
+    if (event.detail > 0) onPointerDone?.();
+  };
 
   return (
     <div
@@ -47,7 +61,7 @@ export function ZoomControl({
       }
     >
       <Tooltip label="Zoom out">
-        <button type="button" aria-label="Zoom out" onClick={actions.zoomOut} className={BUTTON}>
+        <button type="button" aria-label="Zoom out" onClick={press(actions.zoomOut)} className={BUTTON}>
           <Minus size={16} strokeWidth={1.5} aria-hidden />
         </button>
       </Tooltip>
@@ -62,7 +76,7 @@ export function ZoomControl({
         <button
           type="button"
           aria-label={`Reset zoom to 100%, now ${percent}`}
-          onClick={actions.resetZoom}
+          onClick={press(actions.resetZoom)}
           className={
             "h-8 min-w-13 rounded-pill px-1.5 text-xs text-ink-secondary tabular-nums transition-colors " +
             "duration-(--dur-fast) ease-standard hover:bg-wg-50 hover:text-ink focus-visible:focus-ring " +
@@ -74,7 +88,7 @@ export function ZoomControl({
       </Tooltip>
 
       <Tooltip label="Zoom in">
-        <button type="button" aria-label="Zoom in" onClick={actions.zoomIn} className={BUTTON}>
+        <button type="button" aria-label="Zoom in" onClick={press(actions.zoomIn)} className={BUTTON}>
           <Plus size={16} strokeWidth={1.5} aria-hidden />
         </button>
       </Tooltip>
@@ -88,7 +102,7 @@ export function ZoomControl({
           </>
         }
       >
-        <button type="button" aria-label="Fit to content" onClick={actions.fit} className={BUTTON}>
+        <button type="button" aria-label="Fit to content" onClick={press(actions.fit)} className={BUTTON}>
           <Maximize size={16} strokeWidth={1.5} aria-hidden />
         </button>
       </Tooltip>

@@ -432,7 +432,11 @@ export function BoardSurface({
 
         <EmptyBoardHint doc={doc} hydrated={hydrated} boardId={board.id} />
 
-        <ZoomControl store={viewport} actions={camera} />
+        <ZoomControl
+          store={viewport}
+          actions={camera}
+          onPointerDone={() => hostRef.current?.focus({ preventScroll: true })}
+        />
 
         <Toolbar
           value={tools.tool}
