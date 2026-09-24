@@ -131,6 +131,8 @@ export type ElementInit = {
   arrow?: boolean;
   /** Give the element a Y.Text so two people can type in it at once. */
   withText?: boolean;
+  /** Start that Y.Text with this in it (implies withText). */
+  text?: string;
   /** Give the element a Y.Array for pen samples. */
   points?: readonly number[];
 };
@@ -152,13 +154,26 @@ export function createElement(doc: Y.Doc, init: ElementInit): string {
     if (init.strokeWidth !== undefined) map.set("strokeWidth", init.strokeWidth);
     if (init.fontSize !== undefined) map.set("fontSize", init.fontSize);
     if (init.arrow) map.set("arrow", true);
-    if (init.withText) map.set("text", new Y.Text());
+    if (init.withText || init.text !== undefined) map.set("text", new Y.Text(init.text));
     if (init.points) map.set("points", Y.Array.from(init.points.map(Math.round)));
 
     elements(doc).set(id, map);
     order(doc).push([id]);
   }, LOCAL);
   return id;
+}
+
+/**
+ * Several elements at once — a paste, a duplicate — stacked on top in the order
+ * given. One transaction, so it is one update on the wire and one Cmd+Z.
+ */
+export function insertElements(doc: Y.Doc, inits: readonly ElementInit[]): string[] {
+  let ids: string[] = [];
+  // createElement's own transact joins this one rather than starting another.
+  doc.transact(() => {
+    ids = inits.map((init) => createElement(doc, init));
+  }, LOCAL);
+  return ids;
 }
 
 /** A note starts at its §10.7 minimum, centred on where you clicked. */

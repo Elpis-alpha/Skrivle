@@ -266,3 +266,104 @@ test("the canvas pans and zooms without moving the page", async ({ page }) => {
     ))
     .toBeGreaterThan(1);
 });
+
+test("each person sees what the other has selected, and whose it is", async ({ browser }) => {
+  const alice = await browser.newContext();
+  const bob = await browser.newContext();
+  await alice.addInitScript(() => localStorage.setItem("skrivle-guest-name", "Alice"));
+  const a = await alice.newPage();
+  const b = await bob.newPage();
+
+  try {
+    const url = await newBoard(a);
+    await b.goto(url);
+    await settled(b);
+
+    // A new shape comes out selected.
+    await pickTool(a, "r");
+    await dragOut(a, [200, 200], [320, 280]);
+
+    const outline = b.getByTestId("peer-selection");
+    await expect(outline).toHaveCount(1);
+    await expect(outline).toContainText("Alice");
+
+    await a.getByTestId("board-canvas").press("Escape");
+    await expect(outline).toHaveCount(0);
+  } finally {
+    await alice.close();
+    await bob.close();
+  }
+});
+
+test("a peer's drag glides rather than jumping between updates", async ({ browser }) => {
+  const alice = await browser.newContext();
+  const bob = await browser.newContext();
+  const a = await alice.newPage();
+  const b = await bob.newPage();
+
+  try {
+    const url = await newBoard(a);
+    await b.goto(url);
+    await settled(b);
+
+    await pickTool(a, "r");
+    await dragOut(a, [200, 200], [300, 260]);
+    await expect(elements(b)).toHaveCount(1);
+
+    // Every position the document holds is a whole number; anything else Bob
+    // paints is an eased frame between two of Alice's updates.
+    await b.evaluate(() => {
+      const el = document.querySelector<HTMLElement>('[data-testid="board-element"]')!;
+      const seen: string[] = [];
+      new MutationObserver(() => seen.push(el.style.left)).observe(el, {
+        attributes: true,
+        attributeFilter: ["style"],
+      });
+      (window as unknown as { seen: string[] }).seen = seen;
+    });
+
+    // By its top edge, clear of the handles at its corners and midpoints: an
+    // unfilled shape isn't grabbed through its middle, and it is still
+    // selected from being drawn, so a handle would resize it instead.
+    await a.mouse.move(...(await canvasAt(a, 225, 200)));
+    await a.mouse.down();
+    await a.mouse.move(...(await canvasAt(a, 625, 400)), { steps: 40 });
+    await a.mouse.up();
+    await expect
+      .poll(() => b.locator('[data-kind="rect"]').evaluate((el) => (el as HTMLElement).style.left))
+      .toBe("600px");
+
+    const seen = await b.evaluate(() => (window as unknown as { seen: string[] }).seen);
+    expect(seen.some((left) => !Number.isInteger(parseFloat(left)))).toBe(true);
+  } finally {
+    await alice.close();
+    await bob.close();
+  }
+});
+
+test("copy, paste and duplicate make new elements, each one undo", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await newBoard(page);
+
+  // A new shape comes out selected.
+  await pickTool(page, "r");
+  await dragOut(page, [200, 200], [300, 260]);
+  await expect(elements(page)).toHaveCount(1);
+
+  await page.keyboard.press("ControlOrMeta+c");
+  // Pasted where the pointer is: the 100×60 box centred on (600, 400).
+  await page.mouse.move(...(await canvasAt(page, 600, 400)));
+  await page.keyboard.press("ControlOrMeta+v");
+  await expect(elements(page)).toHaveCount(2);
+  await expect(elements(page).nth(1)).toHaveCSS("left", "550px");
+
+  // Duplicate sits just below and right of what it copied.
+  await page.keyboard.press("ControlOrMeta+d");
+  await expect(elements(page)).toHaveCount(3);
+  await expect(elements(page).nth(2)).toHaveCSS("left", "566px");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(elements(page)).toHaveCount(2);
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(elements(page)).toHaveCount(1);
+});

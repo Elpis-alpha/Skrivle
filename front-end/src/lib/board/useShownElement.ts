@@ -81,15 +81,13 @@ function useEased(target: Box, eases: boolean, keys: readonly Key[]): Box {
     let frame = requestAnimationFrame(function tick(now) {
       const dt = now - last;
       last = now;
-      let arrived = false;
-      setState((s) => {
-        const next = approachAll(s.current, s.target, keys, dt);
-        arrived = next === s.target;
-        return { ...s, current: next };
-      });
-      // A new target mid-ease keeps this loop running: `moving` stays true, so
-      // the effect is not torn down, and the next frame reads it from state.
-      if (!arrived) frame = requestAnimationFrame(tick);
+      setState((s) => ({ ...s, current: approachAll(s.current, s.target, keys, dt) }));
+      // Unconditionally: arriving flips `moving` false, and this effect's
+      // cleanup is what stops the loop. Deciding here instead — from inside the
+      // updater — would depend on whether React happens to run it eagerly, and
+      // a peer's next update landing on the arrival frame would find the loop
+      // already gone while `moving` never flipped to restart it.
+      frame = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(frame);
   }, [moving, keys]);

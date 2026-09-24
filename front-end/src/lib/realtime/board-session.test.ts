@@ -297,4 +297,67 @@ describe("createBoardSession", () => {
     s.destroy();
     expect(() => s.setCursor({ x: 1, y: 1 })).not.toThrow();
   });
+
+  it("publishes our selection over awareness", () => {
+    const s = start();
+    const before = socket.countOf(EVENTS.AWARENESS_UPDATE);
+
+    s.setSelection(["a", "b"]);
+
+    expect((s.awareness.getLocalState() as { selection: string[] }).selection).toEqual(["a", "b"]);
+    expect(socket.countOf(EVENTS.AWARENESS_UPDATE) - before).toBe(1);
+  });
+
+  it("doesn't republish a selection that hasn't changed", () => {
+    const s = start();
+    s.setSelection(["a", "b"]);
+    const after = socket.countOf(EVENTS.AWARENESS_UPDATE);
+
+    s.setSelection(["a", "b"]);
+
+    expect(socket.countOf(EVENTS.AWARENESS_UPDATE)).toBe(after);
+  });
+
+  // Every awareness update carries the whole state to every peer.
+  it("caps what it publishes of a huge selection", () => {
+    const s = start();
+    s.setSelection(Array.from({ length: 200 }, (_, i) => `id${i}`));
+    expect((s.awareness.getLocalState() as { selection: string[] }).selection).toHaveLength(50);
+  });
+
+  it("surfaces what a peer has selected", () => {
+    const theirDoc = new Y.Doc();
+    const theirAwareness = new Awareness(theirDoc);
+    theirAwareness.setLocalState({
+      name: "Bo",
+      color: "coral",
+      signedIn: false,
+      cursor: null,
+      selection: ["a", "b"],
+    });
+    socket.receive(
+      EVENTS.AWARENESS_UPDATE,
+      encodeAwarenessUpdate(theirAwareness, [theirDoc.clientID]),
+    );
+
+    expect(session.getSnapshot().peers[0].selection).toEqual(["a", "b"]);
+  });
+
+  it("treats a malformed or missing selection from a peer as nothing selected", () => {
+    const theirDoc = new Y.Doc();
+    const theirAwareness = new Awareness(theirDoc);
+    theirAwareness.setLocalState({
+      name: "Bo",
+      color: "coral",
+      signedIn: false,
+      cursor: null,
+      selection: ["a", 7, null, "b"],
+    });
+    socket.receive(
+      EVENTS.AWARENESS_UPDATE,
+      encodeAwarenessUpdate(theirAwareness, [theirDoc.clientID]),
+    );
+
+    expect(session.getSnapshot().peers[0].selection).toEqual(["a", "b"]);
+  });
 });

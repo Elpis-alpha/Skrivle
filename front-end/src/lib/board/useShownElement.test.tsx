@@ -20,18 +20,19 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** Make a change the way a peer's does arrive: as an update from another doc. */
-function asPeer(id: string, fields: Record<string, unknown>) {
+/** A change made the way a peer's arrives: as an update from another doc. */
+function peerChange(id: string, fields: Record<string, unknown>) {
   const peer = new Y.Doc();
   Y.applyUpdate(peer, Y.encodeStateAsUpdate(doc));
   const map = elements(peer).get(id)!;
   peer.transact(() => {
     for (const [key, value] of Object.entries(fields)) map.set(key, value);
   });
-  act(() => {
-    Y.applyUpdate(doc, Y.encodeStateAsUpdate(peer, Y.encodeStateVector(doc)));
-  });
+  Y.applyUpdate(doc, Y.encodeStateAsUpdate(peer, Y.encodeStateVector(doc)));
 }
+
+const asPeer = (id: string, fields: Record<string, unknown>) =>
+  act(() => peerChange(id, fields));
 
 const rect = () => createElement(doc, { kind: "rect", x: 0, y: 0, w: 100, h: 100 });
 
@@ -67,6 +68,24 @@ describe("useShownElement", () => {
 
     expect(result.current?.shown).toMatchObject({ x: 100, w: 300 });
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  // Peers publish every 50ms and an ease takes about as long, so the next
+  // update routinely lands on the very frame the last ease arrives.
+  it("keeps easing when a peer's next update lands on the frame the last one arrived", () => {
+    const id = rect();
+    const { result } = renderHook(() => useShownElement(doc, id));
+
+    asPeer(id, { x: 100 });
+    // Right up to the frame before it lands.
+    while (100 - result.current!.shown.x > 0.6) act(() => vi.advanceTimersToNextFrame());
+    act(() => {
+      vi.advanceTimersToNextFrame();
+      peerChange(id, { x: 200 });
+    });
+    act(() => vi.advanceTimersByTime(INTERPOLATE_MS * 6));
+
+    expect(result.current?.shown.x).toBe(200);
   });
 
   it("applies our own changes at once — they already painted at frame rate", () => {

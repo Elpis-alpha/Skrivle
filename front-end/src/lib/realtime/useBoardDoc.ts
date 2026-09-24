@@ -13,6 +13,7 @@ export type BoardDoc = BoardSessionState & {
   doc: Y.Doc | null;
   awareness: Awareness | null;
   setCursor: (point: { x: number; y: number } | null) => void;
+  setSelection: (ids: readonly string[]) => void;
 };
 
 const IDLE: BoardDoc = {
@@ -25,6 +26,7 @@ const IDLE: BoardDoc = {
   doc: null,
   awareness: null,
   setCursor: () => {},
+  setSelection: () => {},
 };
 
 /**
@@ -54,6 +56,7 @@ function createSessionHolder() {
           doc: session.doc,
           awareness: session.awareness,
           setCursor: session.setCursor,
+          setSelection: session.setSelection,
         }
       : IDLE;
     notify();
@@ -126,5 +129,10 @@ export function useBoardDoc({
     [holder],
   );
 
-  return { ...state, setCursor };
+  const setSelection = useCallback(
+    (ids: readonly string[]) => holder.getSnapshot().setSelection(ids),
+    [holder],
+  );
+
+  return { ...state, setCursor, setSelection };
 }

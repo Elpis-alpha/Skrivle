@@ -601,6 +601,20 @@ the readout is `text-xs` `tabular-nums`, and pressing it returns to 100%.
   of it would otherwise be in view — a shared link should never open on blank
   paper.
 
+### 10.24 Peer selection
+
+What everyone else has selected, so you can see what they're working on as
+well as where they're pointing. Each element a peer has selected gets a 1.5px
+outline in their cursor `base` hue (§2.6), standing 3px off the element so it
+never merges with your own `--accent` selection box, which draws on top. The
+peer is named once, on the first of their selected elements: a `label`-hue
+pill, white `text-2xs` weight 500 — the same tag as their cursor (§10.10). No
+handles; those are yours.
+
+Outline, gap and tag stay the same size on screen at any zoom, and follow the
+element as it moves or eases. At most 50 of a peer's selected elements are
+outlined. Never colour alone: the name is always on one of them.
+
 ---
 
 ## 11. Tokens — implementation

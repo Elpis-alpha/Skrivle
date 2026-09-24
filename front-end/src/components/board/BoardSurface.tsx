@@ -7,7 +7,7 @@
 // React state — see viewport.ts) and the Yjs document (already live). It wires
 // pointer input to one and renders the other.
 
-import { useCallback, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import Link from "next/link";
 import { Share2 } from "lucide-react";
 import { AvatarCluster } from "@/components/board/AvatarCluster";
@@ -17,6 +17,7 @@ import { ElementLayer } from "@/components/board/ElementLayer";
 import { SelectionLayer } from "@/components/board/SelectionLayer";
 import { Toolbar } from "@/components/board/Toolbar";
 import { ExpiryChip } from "@/components/board/ExpiryChip";
+import { PeerSelectionLayer } from "@/components/board/PeerSelectionLayer";
 import { PresenceLayer } from "@/components/board/PresenceLayer";
 import { ShareDialog } from "@/components/board/ShareDialog";
 import { ZoomControl } from "@/components/board/ZoomControl";
@@ -26,7 +27,15 @@ import { EmptyBoardHint } from "@/components/board/EmptyBoardHint";
 import { Button } from "@/components/ui/Button";
 import type { BoardWithRole } from "@/lib/api/types";
 import { displayNameFor } from "@/lib/board/guest-name";
-import { readElement, removeElements, updateElement } from "@/lib/board/elements";
+import { centredOn, copyPayload, nudged, parsePayload } from "@/lib/board/clipboard";
+import {
+  insertElements,
+  readElement,
+  removeElements,
+  updateElement,
+  type ElementInit,
+} from "@/lib/board/elements";
+import type { Point } from "@/lib/board/geometry";
 import { isChrome, isTypingTarget, useBoardGestures } from "@/lib/board/useBoardGestures";
 import { createPreviewStore } from "@/lib/board/preview";
 import { useBoardTools } from "@/lib/board/useBoardTools";
@@ -44,6 +53,9 @@ import { createViewportStore } from "@/lib/board/viewport";
 import { useBoardDoc } from "@/lib/realtime/useBoardDoc";
 import { useUndo } from "@/lib/realtime/useUndo";
 import { useSession } from "@/lib/session/SessionProvider";
+
+/** How far a duplicate, or a paste with nowhere better to go, sits from what it copied. */
+const COPY_NUDGE = 16;
 
 /** The pointer tells you what the next press will do. */
 function cursorFor(tool: string, grabbing: boolean): string {
@@ -98,7 +110,7 @@ export function BoardSurface({
     if (!isTypingTarget(event.target) && !isChrome(event.target)) event.preventDefault();
   }, []);
 
-  const { doc, status, hydrated, refusal, self, peers, setCursor } = useBoardDoc({
+  const { doc, status, hydrated, refusal, self, peers, setCursor, setSelection } = useBoardDoc({
     boardId: board.id,
     name,
     avatarUrl: user?.avatarUrl ?? null,
@@ -124,6 +136,13 @@ export function BoardSurface({
     [doc, tools.selection, tools.style],
   );
 
+  // Peers see what you have selected (PeerSelectionLayer). Republished when
+  // the session is replaced too — signing in mid-board opens a new one, and it
+  // starts out publishing nothing.
+  useEffect(() => {
+    setSelection(tools.selection);
+  }, [tools.selection, doc, setSelection]);
+
   const { undo, redo, stopCapturing } = useUndo(doc);
   useThumbnail(doc, board.id);
 
@@ -140,14 +159,73 @@ export function BoardSurface({
 
   const camera = useCamera({ doc, store: viewport, hostRef, hydrated });
 
+  // Where the pointer last was on the board, so a paste lands under it. Null
+  // once it leaves the canvas.
+  const lastPointer = useRef<Point | null>(null);
+  const onHover = useCallback(
+    (point: Point | null) => {
+      lastPointer.current = point;
+      setCursor(point);
+    },
+    [setCursor],
+  );
+
   useBoardGestures({
     hostRef,
     store: viewport,
     begin,
     panOnly: tools.tool === "pan",
     onSpaceChange: setGrabbing,
-    onHover: setCursor,
+    onHover,
   });
+
+  // Paste and duplicate: new elements on top, selected, as their own undo step.
+  const insertAndSelect = useCallback(
+    (inits: readonly ElementInit[]) => {
+      if (!doc || inits.length === 0) return;
+      stopCapturing();
+      const ids = insertElements(doc, inits);
+      dispatch({ type: "tool", tool: "select" });
+      dispatch({ type: "select", ids });
+    },
+    [doc, stopCapturing],
+  );
+
+  // Copy and paste ride the browser's own clipboard events rather than the
+  // async Clipboard API: they need no permission, carry across tabs and
+  // boards, and also answer the Edit menu. A note's textarea keeps its own —
+  // its events bubble up here, and are left alone.
+  const onCopy = useCallback(
+    (event: React.ClipboardEvent) => {
+      if (isTypingTarget(event.target) || !doc || tools.selection.length === 0) return;
+      event.preventDefault();
+      event.clipboardData.setData("text/plain", copyPayload(doc, tools.selection));
+    },
+    [doc, tools.selection],
+  );
+
+  // Pasting twice without moving the pointer would stack the copies exactly;
+  // each repeat steps down and right instead.
+  const lastPaste = useRef<{ at: Point; repeats: number } | null>(null);
+  const onPaste = useCallback(
+    (event: React.ClipboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+      const inits = parsePayload(event.clipboardData.getData("text/plain"));
+      if (!inits || inits.length === 0) return;
+      event.preventDefault();
+
+      const at = lastPointer.current;
+      if (!at) {
+        insertAndSelect(nudged(inits, COPY_NUDGE));
+        return;
+      }
+      const again = lastPaste.current?.at.x === at.x && lastPaste.current.at.y === at.y;
+      const repeats = again ? lastPaste.current!.repeats + 1 : 0;
+      lastPaste.current = { at, repeats };
+      insertAndSelect(nudged(centredOn(inits, at), COPY_NUDGE * repeats));
+    },
+    [insertAndSelect],
+  );
 
   // Shortcuts are bound to the canvas rather than the window, because the board
   // title and every note's textarea are also on this page — a window listener
@@ -167,6 +245,15 @@ export function BoardSurface({
         if (key === "-") {
           event.preventDefault();
           camera.zoomOut();
+          return;
+        }
+        // Duplicate — and not the browser's "bookmark this page".
+        if (key === "d") {
+          event.preventDefault();
+          if (doc && tools.selection.length > 0) {
+            const copy = parsePayload(copyPayload(doc, tools.selection)) ?? [];
+            insertAndSelect(nudged(copy, COPY_NUDGE));
+          }
           return;
         }
         // Never reached while typing: the textarea stops propagation, so a note
@@ -217,7 +304,7 @@ export function BoardSurface({
         dispatch({ type: "tool", tool });
       }
     },
-    [doc, tools.selection, undo, redo, stopCapturing, camera],
+    [doc, tools.selection, undo, redo, stopCapturing, camera, insertAndSelect],
   );
 
   // A board that vanished while we were looking at it. The REST fetch already
@@ -291,6 +378,8 @@ export function BoardSurface({
         tabIndex={0}
         aria-label="Board canvas"
         onKeyDown={onKeyDown}
+        onCopy={onCopy}
+        onPaste={onPaste}
         onMouseDown={onMouseDown}
         className={
           "relative flex-1 touch-none select-none overflow-hidden overscroll-contain " +
@@ -325,6 +414,9 @@ export function BoardSurface({
                 hydrated={hydrated}
                 preview={preview}
               />
+              {/* Everyone else's selections sit under your own, which is the
+                  one with handles you can grab. */}
+              <PeerSelectionLayer doc={doc} peers={peers} preview={preview} />
               <SelectionLayer
                 doc={doc}
                 ids={tools.selection}

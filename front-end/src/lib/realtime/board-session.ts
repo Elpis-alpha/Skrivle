@@ -26,6 +26,7 @@ import { toBytes } from "./bytes";
 import { claimRootTypes } from "./doc-schema";
 import {
   colorByName,
+  MAX_SHARED_SELECTION,
   peersFrom,
   type Cursor,
   type PresencePeer,
@@ -123,6 +124,8 @@ export type BoardSession = {
   getSnapshot: () => BoardSessionState;
   /** Publish the local cursor in board coordinates. Throttled internally. */
   setCursor: (point: { x: number; y: number } | null) => void;
+  /** Publish what we have selected, so peers can see it. Capped; deduplicated. */
+  setSelection: (ids: readonly string[]) => void;
   destroy: () => void;
 };
 
@@ -165,6 +168,7 @@ export function createBoardSession(
     signedIn: false,
     avatarUrl,
     cursor: null,
+    selection: [],
   };
   awareness.setLocalState(localState);
 
@@ -359,6 +363,22 @@ export function createBoardSession(
     }
   }
 
+  // --- local selection ------------------------------------------------------
+
+  // Not throttled: a selection changes on a click, not per pointer sample.
+  let publishedSelection: readonly string[] = [];
+
+  function setSelection(ids: readonly string[]): void {
+    if (destroyed) return;
+    const next = ids.slice(0, MAX_SHARED_SELECTION);
+    const same =
+      next.length === publishedSelection.length &&
+      next.every((id, i) => id === publishedSelection[i]);
+    if (same) return;
+    publishedSelection = next;
+    awareness.setLocalStateField("selection", next);
+  }
+
   // --- teardown -------------------------------------------------------------
 
   function destroy(): void {
@@ -394,6 +414,7 @@ export function createBoardSession(
     },
     getSnapshot: () => state,
     setCursor,
+    setSelection,
     destroy,
   };
 }

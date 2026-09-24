@@ -16,7 +16,19 @@ export type PresenceState = {
   signedIn: boolean;
   avatarUrl?: string | null;
   cursor: Cursor | null;
+  /**
+   * Element ids this peer has selected, so everyone else can see what they're
+   * working on. Optional: a peer on an older build never sends it.
+   */
+  selection?: string[];
 };
+
+/**
+ * How much of a selection goes out. Every awareness update carries the whole
+ * state to every peer, and a marquee over a busy board can select hundreds —
+ * fifty outlines already say "they've selected a lot".
+ */
+export const MAX_SHARED_SELECTION = 50;
 
 export type PresencePeer = {
   /** Yjs awareness client id — the only stable per-connection key. Not the
@@ -27,7 +39,17 @@ export type PresencePeer = {
   signedIn: boolean;
   avatarUrl: string | null;
   cursor: Cursor | null;
+  /** Never missing: a peer that sent nothing, or something malformed, has none. */
+  selection: string[];
 };
+
+/** A peer's selection as sent, trusted only as far as its shape can be checked. */
+function selectionFrom(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((id): id is string => typeof id === "string")
+    .slice(0, MAX_SHARED_SELECTION);
+}
 
 /**
  * Resolves a published colour name to a palette entry. Falls back by client id
@@ -66,6 +88,7 @@ export function peersFrom(
       signedIn: state.signedIn === true,
       avatarUrl: state.avatarUrl ?? null,
       cursor: state.cursor ?? null,
+      selection: selectionFrom(state.selection),
     });
   }
 

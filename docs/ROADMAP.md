@@ -47,8 +47,8 @@ board. Front-end only — no doc schema or wire-format changes.
 - [x] Share button + dialog, inline title rename, toasts
 - [x] Zoom control, fit to content, and fit on load
 - [x] Empty-board hint
-- [ ] Peers' selections shown on the board
-- [ ] Copy, paste, duplicate
+- [x] Peers' selections shown on the board
+- [x] Copy, paste, duplicate
 
 ## Phase 2 — Native app
 
