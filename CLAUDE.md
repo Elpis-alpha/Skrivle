@@ -69,8 +69,19 @@ tests start a real back-end and cover sign-in and two-tab cursor sync.
 resize, undo/redo, and client-rendered board thumbnails. The element schema
 lives in `front-end/src/lib/realtime/doc-schema.ts`; every write goes through
 `src/lib/board/elements.ts`, which wraps each gesture in one `doc.transact` under
-the `LOCAL` origin. What's left for the roadmap is Phase 2, the native app — see
-[docs/ROADMAP.md](docs/ROADMAP.md).
+the `LOCAL` origin.
+
+**The board has had a first polish pass** (ROADMAP "Phase 1.5"). A Share
+button and dialog, inline rename for owners, toasts, a zoom control with fit to
+content (a board opens fitted when none of its content is in view), and an
+empty-board hint. Peers' selections cross the wire as an awareness `selection`
+field and are outlined in their cursor hue. Copy, paste and duplicate go through
+`src/lib/board/clipboard.ts`, which treats pasted text as untrusted and rebuilds
+every element field by field. Pen ink is a filled, tapered outline
+(perfect-freehand) at constant weight — speed-simulated pressure was tried and
+dropped, because `simplify()` on release changed a finished stroke's weight by
+up to half. None of it changed the doc schema. What's left for the roadmap is
+Phase 2, the native app — see [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Five things worth knowing before touching this seam:
 

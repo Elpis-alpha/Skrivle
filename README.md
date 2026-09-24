@@ -12,10 +12,10 @@ across them.
 
 | Folder | What it is |
 | --- | --- |
-| [`front-end/`](front-end/) | React / Next.js + Tailwind web client — live at `skrivle.elpis.cc` (Cloudflare Workers / OpenNext) |
-| [`back-end/`](back-end/) | Node.js / Express + Socket.IO + Yjs server |
+| [`front-end/`](front-end/) | React / Next.js + Tailwind web client — live at [`skrivle.elpis.cc`](https://skrivle.elpis.cc/) (Cloudflare Workers / OpenNext) |
+| [`back-end/`](back-end/) | Node.js / Express + Socket.IO + Yjs server — live at [`api.skrivle.elpis.cc/docs`](https://api.skrivle.elpis.cc/docs) (Docker) |
 | [`app-native/`](app-native/) | React Native app — phase 2 viewer / light editor |
-| [`coming-soon/`](coming-soon/) | Static holding page (Cloudflare) — live at `soon.skrivle.elpis.cc` until launch |
+| [`coming-soon/`](coming-soon/) | Static holding page (Cloudflare) — at [`soon.skrivle.elpis.cc`](https://soon.skrivle.elpis.cc) |
 | [`docs/`](docs/) | Architecture, style guide, roadmap |
 
 ## Documentation

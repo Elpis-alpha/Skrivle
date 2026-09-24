@@ -44,7 +44,8 @@ are both *same-site*, so the `SameSite=Lax` cookie rides along.
 
 `npm run test:e2e` starts **both** servers itself — the front-end and a real
 back-end on port 4100 — so the suite exercises the actual wire contract: real
-sign-in, real board creation, real two-tab cursor sync.
+sign-in, real board creation, and two people on one board seeing each other's
+cursors, drawing, selections and drags.
 
 One-time setup, from `back-end/`:
 
@@ -59,7 +60,9 @@ Notes:
   the test environment ignored, and the suite run against your **development
   database**.
 - The e2e back-end uses Redis logical database 1. Reset it with
-  `redis-cli -n 1 flushdb` if the per-IP rate limits start biting.
+  `redis-cli -n 1 flushdb` if the per-IP rate limits start biting. The usual
+  symptom is board creation's limit after a few full runs: "New board" never
+  leaves `/`, and many specs fail on the same `toHaveURL`.
 - It runs with `AUTH_DEV_CODES=1`, which returns the sign-in code in the
   `POST /api/auth/email/request` response instead of mailing it — that is how
   the tests sign in without an inbox. It is ignored in production.
@@ -108,7 +111,8 @@ of truth and are wired in here:
 | REST client (one `apiFetch`, hand-written types mirroring `openapi.yaml`) | [`src/lib/api/`](src/lib/api/) |
 | Yjs + Socket.IO session, framework-free, and its React binding | [`src/lib/realtime/`](src/lib/realtime/) |
 | Who you are (`GET /api/auth/me`, once, per product surface) | [`src/lib/session/`](src/lib/session/) |
-| Guest board tokens, claiming, expiry copy | [`src/lib/board/`](src/lib/board/) |
+| The canvas's logic: tools and gestures, geometry, camera, clipboard, strokes; guest board tokens, claiming, expiry copy | [`src/lib/board/`](src/lib/board/) |
+| The board's UI: canvas layers, toolbar, share dialog, zoom control | [`src/components/board/`](src/components/board/) |
 
 Routes are split into two groups: `(marketing)` depends on no back-end and
 stays fully static; `(product)` (`/signin`, `/board/[id]`, `/boards`) sits under
@@ -122,13 +126,16 @@ port), which is exactly the trap: it would work here and break after deploy.
 
 ## Not built yet
 
-Still to come (see [`docs/ROADMAP.md`](../docs/ROADMAP.md)):
+The board is built — the eight tools, selection, undo, pan/zoom with a zoom
+control, sharing, rename, peers' cursors and selections, copy/paste, and
+thumbnails. Still to come (see [`docs/ROADMAP.md`](../docs/ROADMAP.md)):
 
-- Canvas: pan/zoom and the dot grid's zoom response
-- Tools: sticky note, text box, rectangle, circle, line/arrow, freehand pen
-- Board thumbnails (render + signed Cloudinary upload)
-- Share dialog, board rename/delete from `/boards`, tooltips (§10.19)
+- Rename, duplicate and delete from the My Boards tiles (§10.15)
+- The text-size control for text boxes (§10.9) and the toolbar's "more" group
+  (§10.5)
+- Phase 2, the native app
 
-The Yjs document and its transport are already live, so a tool only has to read
-and write the root types in
-[`src/lib/realtime/doc-schema.ts`](src/lib/realtime/doc-schema.ts).
+Every write to the canvas goes through
+[`src/lib/board/elements.ts`](src/lib/board/elements.ts), against the element
+schema in [`src/lib/realtime/doc-schema.ts`](src/lib/realtime/doc-schema.ts),
+whose field names are wire format: add fields, never rename them.

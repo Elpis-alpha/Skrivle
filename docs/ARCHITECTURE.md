@@ -1,22 +1,21 @@
 # Skrivle — Architecture
 
-Status: the back-end is built — schema, auth, REST, realtime, and media.
-The canvas client is not. See docs/ROADMAP.md.
+Status: v1 is built and live — both tiers, wired together, plus a first polish
+pass on the board. See docs/ROADMAP.md.
 
 ## High-level shape
 
 ```
-Browser (Next.js)                 Server (Express)                PostgreSQL
-  React canvas                      Socket.IO gateway               users
-  Yjs doc (client replica)  <--->   Yjs doc (in-memory, per board)  boards
+Browser (Next.js)                 Server (Express)                     PostgreSQL
+  React canvas                      Socket.IO gateway                    users
+  Yjs doc (client replica)  <--->   Yjs doc (in-memory, per board)       boards
   Socket.IO client                  Auth (email code / GitHub / Google)  board_collaborators
-                                    Snapshot writer                 board_snapshots
+                                    Snapshot writer                      board_snapshots
 ```
 
 Hosting is split by tier. The `coming-soon/` static page and the `front-end/`
 (Next.js, deployed via OpenNext) are served by **Cloudflare**. Only the `back-end/` runs as a Docker
-Compose stack, with **Nginx** terminating TLS and reverse-proxying `/socket.io`
-+ `/api` to the Express server. See [Deployment](#deployment) for domains.
+Compose stack, with Redis within the compose.
 
 ## Real-time sync model
 
@@ -31,6 +30,14 @@ resolution; the server is a relay plus the authority on persistence.
   on both ends of the wire and nothing in between.
 - **Document updates** (shapes, notes, text, strokes) are Yjs updates — applied to
   the in-memory doc and fanned out to other clients in the board room.
+
+On the client, drawing runs on two clocks. The person drawing sees every frame:
+a move, resize, shape or pen stroke is painted straight onto the DOM as the
+pointer moves. The document — and so the network — hears about it only every
+50ms (`PUBLISH_MS`), because Socket.IO sends a binary event as two frames and
+nothing upstream rate-limits a socket. Peers therefore receive changes in 50ms
+steps, and each client eases a peer's moves and resizes over ~70ms, the same
+approach its cursor uses, so an element travels with the cursor dragging it.
 
 ### Persistence: snapshots, not rows
 
@@ -154,8 +161,8 @@ Hosted under `elpis.cc`, split by tier:
   the container rather than serving a stale schema — safe because there is
   exactly one back-end process. Ad-hoc:
   `docker compose --profile migrate run --rm migrate {status,deploy}`.
-- The front-end URL is public, but the v1 "working demo URL" criterion is not met
-  until the canvas ships.
+- The v1 "working demo URL" criterion is met: the canvas is live end to end at
+  `skrivle.elpis.cc`.
 
 ## Decisions
 
@@ -174,9 +181,9 @@ Hosted under `elpis.cc`, split by tier:
   browser-to-Cloudinary against a server-minted signature, so no multipart body
   passes through Express. Public ids are derived from the board or user id, which
   makes them unforgeable and makes re-uploads overwrite rather than accumulate.
+  Thumbnails are rendered in the browser and re-uploaded after five idle seconds
+  of changes, or when the page is hidden.
 
 ## Still open
 
 - Custom-id abuse (squatting, profanity) — allowlist/denylist or leave for later.
-- Board thumbnails are rendered and uploaded by the client; the cadence (on
-  navigate-away, debounced while dirty) lands with the canvas.

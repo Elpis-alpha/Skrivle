@@ -1,7 +1,8 @@
 # Skrivle — Style Guide
 
-Status: design system spec. No UI is built yet. This document is the source of
-truth for anything visual in `front-end/` and `coming-soon/`.
+Status: the design system the live product is built from. This document is the
+source of truth for anything visual in `front-end/` and `coming-soon/`; the
+authoritative Tailwind v4 translation of §11 is `front-end/src/app/globals.css`.
 
 Brand constraints (fixed): **Poppins** for all type · **minimal** · canvas is
 **white / off-white / warm gray** · accent is **`#32174D`, "Dark Amethyst"**.
