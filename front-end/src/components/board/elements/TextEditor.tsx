@@ -16,7 +16,6 @@ import * as Y from "yjs";
 import { applyTextEdit, textOf, updateElement } from "@/lib/board/elements";
 import type { ElementSnapshot } from "@/lib/realtime/doc-schema";
 import { useYText } from "@/lib/realtime/useElements";
-import { NOTE_PADDING } from "../note-style";
 
 type Caret = { start: number; end: number };
 
@@ -108,11 +107,17 @@ export function TextEditor({
     if (editing) ref.current?.focus();
   }, [editing]);
 
-  // §10.7 — a note grows downward as it fills up.
+  // §10.7 — a note grows downward as it fills up, and so does a text box.
   //
-  // Measured with scrollHeight, never getBoundingClientRect: inside the camera
-  // that would return transformed screen pixels and the note would resize
-  // itself differently at every zoom level.
+  // Measured with scrollHeight and clientHeight, never getBoundingClientRect:
+  // inside the camera that would return transformed screen pixels and the box
+  // would resize itself differently at every zoom level.
+  //
+  // What sits between the element's box and this field — a note's padding and
+  // border, a text box's border alone — is measured too, not assumed. Assuming
+  // a note's padding made a text box "need" 22px more than it had on every
+  // render: each write grew the box, the field grew with it, and the next
+  // measurement asked for 22px more, until React gave up.
   //
   // Only the person editing writes the height. Every client measures slightly
   // differently depending on font loading, so letting them all write it would
@@ -121,7 +126,8 @@ export function TextEditor({
     if (!editing) return;
     const field = ref.current;
     if (!field) return;
-    const needed = field.scrollHeight + NOTE_PADDING * 2;
+    const chrome = el.h - field.clientHeight;
+    const needed = Math.ceil(field.scrollHeight + chrome);
     if (needed > el.h) updateElement(doc, el.id, { h: needed });
   }, [value, editing, el.h, el.id, doc]);
 

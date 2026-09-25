@@ -1,9 +1,10 @@
 import { act, render } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import { appendPoints, createElement } from "@/lib/board/elements";
+import { appendPoints, createElement, readElement } from "@/lib/board/elements";
 import { createPreviewStore, type PreviewStore } from "@/lib/board/preview";
 import { strokeOutline } from "@/lib/board/stroke";
+import { elements } from "@/lib/realtime/doc-schema";
 import { ElementView } from "./ElementView";
 
 let doc: Y.Doc;
@@ -13,19 +14,23 @@ beforeEach(() => {
   preview = createPreviewStore();
 });
 
-const renderElement = (id: string) =>
-  render(
-    <ElementView
-      doc={doc}
-      id={id}
-      index={0}
-      editing={false}
-      dragging={false}
-      onEndEdit={() => {}}
-      settling={false}
-      preview={preview}
-    />,
-  );
+const elementView = (id: string, editing = false) => (
+  <ElementView
+    doc={doc}
+    id={id}
+    index={0}
+    editing={editing}
+    dragging={false}
+    onEndEdit={() => {}}
+    settling={false}
+    preview={preview}
+  />
+);
+
+const renderElement = (id: string) => render(elementView(id));
+
+/** Mount first, then open the editor — the order the board does it in. */
+const openEditor = (id: string) => renderElement(id).rerender(elementView(id, true));
 
 const wrapper = (container: HTMLElement) =>
   container.querySelector<HTMLElement>("[data-testid='board-element']")!;
@@ -120,5 +125,76 @@ describe("ElementView", () => {
     const style = wrapper(container).style;
     expect(style.getPropertyValue("content-visibility")).toBe("");
     expect(style.contain ?? "").not.toMatch(/paint|strict|content/);
+  });
+});
+
+// jsdom has no layout, so every height reads 0 and a note or text box never
+// "needs" to grow. These stand in for the browser: the field's height follows
+// its element's box, less whatever the view puts around it, so a taller box
+// feeds back into the next measurement the way it does for real.
+describe("text growth while editing", () => {
+  /** Border and padding between the element's box and its textarea, per view. */
+  const CHROME: Record<string, number> = {
+    text: 2, // TextView: a 1px border, no padding.
+    note: 26, // NoteView: 12px padding inside a 1px border.
+  };
+
+  let content = 0;
+  let reads = 0;
+
+  beforeEach(() => {
+    content = 0;
+    reads = 0;
+    Object.defineProperty(HTMLTextAreaElement.prototype, "clientHeight", {
+      configurable: true,
+      get(this: HTMLTextAreaElement) {
+        // A box that keeps growing would otherwise loop until React gives up,
+        // or hang the run; fail loudly instead.
+        if (++reads > 50) throw new Error("the box never stopped growing");
+        const box = this.closest<HTMLElement>("[data-testid='board-element']")!;
+        return parseFloat(box.style.height) - CHROME[box.dataset.kind!];
+      },
+    });
+    Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
+      configurable: true,
+      get(this: HTMLTextAreaElement) {
+        return Math.max(this.clientHeight, content);
+      },
+    });
+  });
+
+  afterEach(() => {
+    // Back to jsdom's own, on Element.prototype.
+    delete (HTMLTextAreaElement.prototype as { clientHeight?: number }).clientHeight;
+    delete (HTMLTextAreaElement.prototype as { scrollHeight?: number }).scrollHeight;
+  });
+
+  const heightOf = (id: string) => readElement(id, elements(doc).get(id)!).h;
+
+  it("leaves a text box alone while its text fits", () => {
+    const id = createElement(doc, { kind: "text", x: 0, y: 0, w: 220, h: 28, withText: true });
+    content = 20;
+
+    openEditor(id);
+
+    expect(heightOf(id)).toBe(28);
+  });
+
+  it("grows a text box exactly to fit text that overflows it", () => {
+    const id = createElement(doc, { kind: "text", x: 0, y: 0, w: 220, h: 28, withText: true });
+    content = 60;
+
+    openEditor(id);
+
+    expect(heightOf(id)).toBe(62);
+  });
+
+  it("grows a note exactly to fit text that overflows it", () => {
+    const id = createElement(doc, { kind: "note", x: 0, y: 0, w: 160, h: 160, withText: true });
+    content = 200;
+
+    openEditor(id);
+
+    expect(heightOf(id)).toBe(226);
   });
 });

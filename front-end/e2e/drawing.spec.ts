@@ -56,6 +56,10 @@ test("each tool draws the element it is named for", async ({ page }) => {
   await page.mouse.click(...(await canvasAt(page, 200, 200)));
   await page.keyboard.press("Escape");
 
+  await pickTool(page, "t");
+  await page.mouse.click(...(await canvasAt(page, 800, 320)));
+  await page.keyboard.press("Escape");
+
   await pickTool(page, "r");
   await dragOut(page, [400, 140], [560, 240]);
 
@@ -73,8 +77,8 @@ test("each tool draws the element it is named for", async ({ page }) => {
   }
   await page.mouse.up();
 
-  await expect(elements(page)).toHaveCount(5);
-  expect((await kinds(page)).sort()).toEqual(["ellipse", "line", "note", "path", "rect"]);
+  await expect(elements(page)).toHaveCount(6);
+  expect((await kinds(page)).sort()).toEqual(["ellipse", "line", "note", "path", "rect", "text"]);
 });
 
 test("a note is placed at its minimum size and opens for typing", async ({ page }) => {
@@ -92,6 +96,35 @@ test("a note is placed at its minimum size and opens for typing", async ({ page 
   await expect(note.locator("textarea")).toBeFocused();
   await page.keyboard.type("hello");
   await expect(note.locator("textarea")).toHaveValue("hello");
+});
+
+test("a text box opens for typing and only grows when its text needs room", async ({ page }) => {
+  // The editor once measured a text box as if it had a note's padding, "needed"
+  // 22px more on every render, and grew until React gave up (#185).
+  const errors: Error[] = [];
+  page.on("pageerror", (error) => errors.push(error));
+  await newBoard(page);
+
+  await pickTool(page, "t");
+  await page.mouse.click(...(await canvasAt(page, 300, 300)));
+
+  const box = page.locator('[data-kind="text"]');
+  const field = box.locator("textarea");
+  const height = () => box.evaluate((el) => parseFloat((el as HTMLElement).style.height));
+  await expect(field).toBeFocused();
+  const before = await height();
+
+  await page.keyboard.type("hello");
+  await expect(field).toHaveValue("hello");
+  expect(await height()).toBe(before);
+
+  for (const line of ["two", "three", "four", "five"]) {
+    await page.keyboard.press("Enter");
+    await page.keyboard.type(line);
+  }
+  await expect(field).toHaveValue("hello\ntwo\nthree\nfour\nfive");
+  await expect.poll(height).toBeGreaterThan(before);
+  expect(errors).toEqual([]);
 });
 
 test("what one person draws, the other sees", async ({ browser }) => {
