@@ -113,21 +113,7 @@ export function useBoardTools({
 
       const { tool, style, selection } = state;
       const scale = store.getSnapshot().scale;
-
-      const snapshots = (): ElementSnapshot[] => {
-        const els = elements(doc);
-        return orderedIds(doc)
-          .map((id) => {
-            const map = els.get(id);
-            return map ? readElement(id, map) : null;
-          })
-          .filter((el): el is ElementSnapshot => el !== null);
-      };
-
-      const pointsFor = (id: string) => {
-        const map = elements(doc).get(id);
-        return map ? (pointsOf(map)?.toArray() ?? undefined) : undefined;
-      };
+      const pointsFor = samplesIn(doc);
 
       // --- Placing and drawing ------------------------------------------
       // Placed as the press ends rather than as it starts, so a press that
@@ -149,7 +135,7 @@ export function useBoardTools({
       // The Text tool on text that's already there edits it, rather than
       // stacking a new, empty box on top of it.
       if (tool === "text") {
-        const hit = topmostAt(snapshots(), start, scale, pointsFor);
+        const hit = topmostAt(snapshots(doc), start, scale, pointsFor);
         if (hit && holdsText(hit.kind)) {
           dispatch({ type: "edit", id: hit.id });
           return null;
@@ -161,7 +147,7 @@ export function useBoardTools({
       }
 
       // --- Select --------------------------------------------------------
-      const all = snapshots();
+      const all = snapshots(doc);
 
       // A handle beats everything under it: a resize grip on the edge of a note
       // sits over the note itself, and grabbing it must not just move the note.
@@ -213,6 +199,35 @@ export function useBoardTools({
 }
 
 const NOTHING: readonly string[] = [];
+
+/** Everything on the board, in paint order. */
+function snapshots(doc: Y.Doc): ElementSnapshot[] {
+  const els = elements(doc);
+  return orderedIds(doc)
+    .map((id) => {
+      const map = els.get(id);
+      return map ? readElement(id, map) : null;
+    })
+    .filter((el): el is ElementSnapshot => el !== null);
+}
+
+/** A stroke's samples by id, for hit-testing its line rather than its box. */
+function samplesIn(doc: Y.Doc) {
+  return (id: string) => {
+    const map = elements(doc).get(id);
+    return map ? (pointsOf(map)?.toArray() ?? undefined) : undefined;
+  };
+}
+
+/**
+ * §10.9 — the text box a press here would land on, if any, for its hover
+ * border. The same hit-test a press uses, so the border never promises what
+ * a press wouldn't do: a note or a filled shape painted over it hides it.
+ */
+export function textBoxAt(doc: Y.Doc, point: Point, scale: number): string | null {
+  const hit = topmostAt(snapshots(doc), point, scale, samplesIn(doc));
+  return hit?.kind === "text" ? hit.id : null;
+}
 
 /** Which resize handle, if any, the pointer is on. */
 function handleUnder(

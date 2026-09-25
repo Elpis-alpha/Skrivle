@@ -12,6 +12,7 @@ import { ElementView } from "./ElementView";
 export function ElementLayer({
   doc,
   editingId,
+  hoveredId,
   draggingIds,
   onEndEdit,
   hydrated,
@@ -19,6 +20,8 @@ export function ElementLayer({
 }: {
   doc: Y.Doc;
   editingId: string | null;
+  /** The text box under the pointer, for its §10.9 hover border. */
+  hoveredId: string | null;
   draggingIds: readonly string[];
   onEndEdit: () => void;
   /** The §7 settle signal from useBoardDoc. */
@@ -51,6 +54,7 @@ export function ElementLayer({
           id={id}
           index={index}
           editing={editingId === id}
+          hovered={hoveredId === id}
           dragging={draggingIds.includes(id)}
           onEndEdit={onEndEdit}
           settling={settleBatch?.has(id) ?? false}

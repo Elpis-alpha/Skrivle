@@ -91,8 +91,9 @@ the v1 scope.
 
 **Style guide, not yet kept**
 
-- [ ] Dashed border on hovering a text box (§10.9), driven by the hover hit-test
-  since elements take no pointer events
+- [x] Dashed border on hovering a text box (§10.9), driven by the hover hit-test
+  since elements take no pointer events — with Select and Text only, the tools
+  a press on it would act on
 - [ ] "Back online" toast (§10.21); the reconnect bar's "saved locally" is only
   true in memory until offline persistence lands
 - [ ] Avatar cluster popover: who's here, and their role (§10.11)

@@ -45,7 +45,7 @@ import type { Point } from "@/lib/board/geometry";
 import { continuesBurst, nudgeFor, type Nudge } from "@/lib/board/nudge";
 import { isChrome, isTypingTarget, useBoardGestures } from "@/lib/board/useBoardGestures";
 import { createPreviewStore } from "@/lib/board/preview";
-import { useBoardTools } from "@/lib/board/useBoardTools";
+import { textBoxAt, useBoardTools } from "@/lib/board/useBoardTools";
 import { useCamera } from "@/lib/board/useCamera";
 import { useThumbnail } from "@/lib/board/useThumbnail";
 import {
@@ -196,6 +196,12 @@ export function BoardSurface({
 
   const camera = useCamera({ doc, store: viewport, hostRef, hydrated });
 
+  // §10.9 — the text box under the pointer gets a dashed border, but only with
+  // the tools a press on it would act on: Select takes it, Text edits it. The
+  // elements take no pointer events, so this is the hit-test, not :hover.
+  const [hoveredText, setHoveredText] = useState<string | null>(null);
+  const hoverShows = tools.tool === "select" || tools.tool === "text";
+
   // Where the pointer last was on the board, so a paste lands under it. Null
   // once it leaves the canvas.
   const lastPointer = useRef<Point | null>(null);
@@ -203,8 +209,11 @@ export function BoardSurface({
     (point: Point | null) => {
       lastPointer.current = point;
       setCursor(point);
+      setHoveredText(
+        point && doc && hoverShows ? textBoxAt(doc, point, viewport.getSnapshot().scale) : null,
+      );
     },
-    [setCursor],
+    [setCursor, doc, hoverShows, viewport],
   );
 
   useBoardGestures({
@@ -504,6 +513,9 @@ export function BoardSurface({
               <ElementLayer
                 doc={doc}
                 editingId={tools.editingId}
+                // Gated here too, so picking another tool clears it without
+                // waiting for the pointer to move.
+                hoveredId={hoverShows ? hoveredText : null}
                 draggingIds={draggingIds}
                 onEndEdit={endEdit}
                 hydrated={hydrated}

@@ -15,19 +15,23 @@ export function TextView({
   map,
   doc,
   editing,
+  hovered,
   onEndEdit,
 }: {
   el: ElementSnapshot;
   map: Y.Map<unknown>;
   doc: Y.Doc;
   editing: boolean;
+  hovered: boolean;
   onEndEdit: () => void;
 }) {
   return (
     <div
       className={
         "size-full overflow-hidden " +
-        (editing ? "border border-accent" : "border border-dashed border-transparent")
+        (editing
+          ? "border border-accent"
+          : "border border-dashed " + (hovered ? "border-border" : "border-transparent"))
       }
       // Colour comes from the stroke picker (§10.9), so a text box and a line
       // drawn in the same ink match.

@@ -13,6 +13,7 @@ import {
   beginStroke,
   DOUBLE_PRESS_MS,
   isDoublePress,
+  textBoxAt,
 } from "./useBoardTools";
 
 let doc: Y.Doc;
@@ -241,5 +242,40 @@ describe("isDoublePress", () => {
     const next = { ...first, at: first.at + 200, x: first.x + 4 };
     expect(isDoublePress(first, next, 1)).toBe(true);
     expect(isDoublePress(first, next, 4)).toBe(false);
+  });
+});
+
+describe("textBoxAt", () => {
+  const textBox = (x = 0, y = 0) =>
+    createElement(doc, { kind: "text", x, y, w: 200, h: 40, withText: true });
+  const note = () =>
+    createElement(doc, { kind: "note", x: 0, y: 0, w: 160, h: 160, withText: true });
+
+  it("is the text box under the pointer", () => {
+    const id = textBox();
+    expect(textBoxAt(doc, { x: 20, y: 20 }, 1)).toBe(id);
+  });
+
+  it("is null over a note, which has a border of its own", () => {
+    note();
+    expect(textBoxAt(doc, { x: 20, y: 20 }, 1)).toBeNull();
+  });
+
+  it("is null where something painted over the text box covers it", () => {
+    textBox();
+    note();
+    expect(textBoxAt(doc, { x: 20, y: 20 }, 1)).toBeNull();
+  });
+
+  // Only a shape's line is solid, so a press there goes through to the text.
+  it("finds a text box through the middle of an empty rectangle drawn over it", () => {
+    const id = textBox(40, 40);
+    createElement(doc, { kind: "rect", x: 0, y: 0, w: 300, h: 300 });
+    expect(textBoxAt(doc, { x: 60, y: 60 }, 1)).toBe(id);
+  });
+
+  it("is null over empty board", () => {
+    textBox();
+    expect(textBoxAt(doc, { x: 900, y: 900 }, 1)).toBeNull();
   });
 });

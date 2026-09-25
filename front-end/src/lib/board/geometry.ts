@@ -250,6 +250,10 @@ export function hitTest(
  *
  * `ordered` is the paint order, so this walks it backwards: the last thing
  * painted is the first thing you can grab.
+ *
+ * A stroke's samples are only asked for once the pointer is inside its box:
+ * hover runs this on every move, and copying out every stroke's samples each
+ * time would be most of the cost.
  */
 export function topmostAt(
   ordered: readonly ElementSnapshot[],
@@ -259,6 +263,7 @@ export function topmostAt(
 ): ElementSnapshot | null {
   for (let i = ordered.length - 1; i >= 0; i--) {
     const el = ordered[i];
+    if (!rectContains(inflate(bboxOf(el), toleranceFor(el, scale)), point)) continue;
     if (hitTest(el, point, scale, pointsOf?.(el.id))) return el;
   }
   return null;

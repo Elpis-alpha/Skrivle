@@ -485,7 +485,9 @@ Shapes and lines keep a uniform stroke.
 ### 10.9 Text box
 
 No border or background until hovered (1px dashed `--border`) or editing (1px
-solid `--accent`). Placeholder `--ink-muted` "Type something". `text-base` to
+solid `--accent`). The hover border shows only with the tools a press on it
+would act on — Select and Text — and only where nothing painted over it hides
+it; every other tool draws on top. Placeholder `--ink-muted` "Type something". `text-base` to
 `text-2xl` via the size control; color from the stroke picker. Grows downward as
 it fills, like a note. Reopened the note's way (§10.7), and also by pressing on
 it with the Text tool, which edits it rather than placing a new box on top.

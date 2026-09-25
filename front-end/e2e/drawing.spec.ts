@@ -570,6 +570,47 @@ test("an empty text box is removed when editing ends, and undo leaves it gone", 
   await expect(elements(page)).toHaveCount(0);
 });
 
+test("a text box shows a dashed border on hover, with the tools that act on it", async ({
+  page,
+}) => {
+  await newBoard(page);
+  await pickTool(page, "t");
+  await page.mouse.click(...(await canvasAt(page, 300, 300)));
+  await page.keyboard.type("hover me");
+  await page.keyboard.press("Escape");
+
+  const textBox = page.locator('[data-kind="text"]');
+  const box = (await textBox.boundingBox())!;
+  const over = [box.x + box.width / 2, box.y + box.height / 2] as const;
+  const border = () =>
+    textBox.locator("> div").evaluate((el) => {
+      const style = getComputedStyle(el);
+      return style.borderTopColor === "rgba(0, 0, 0, 0)" ? "none" : style.borderTopStyle;
+    });
+
+  await pickTool(page, "v");
+  await expect.poll(border).toBe("none");
+  await page.mouse.move(...over);
+  await expect.poll(border).toBe("dashed");
+  await page.mouse.move(...(await canvasAt(page, 700, 500)));
+  await expect.poll(border).toBe("none");
+
+  // From here the toolbar picks the tool: pickTool's click on the canvas would
+  // place a text box with the Text tool.
+
+  // A press with the Text tool edits it, so the border says so.
+  await page.getByRole("button", { name: "Text (T)" }).click();
+  await page.mouse.move(...over);
+  await expect.poll(border).toBe("dashed");
+
+  // A press with the pen draws over it, so nothing is promised — and changing
+  // tool takes the border away without waiting for the pointer to move.
+  await page.keyboard.press("p");
+  await expect.poll(border).toBe("none");
+  await page.mouse.move(over[0] + 4, over[1]);
+  await expect.poll(border).toBe("none");
+});
+
 test("two fingers pinch to zoom and drag to pan, and draw nothing", async ({ browser }) => {
   const context = await browser.newContext({ hasTouch: true });
   const page = await context.newPage();

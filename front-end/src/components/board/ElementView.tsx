@@ -35,6 +35,7 @@ function ElementViewInner({
   id,
   index,
   editing,
+  hovered = false,
   dragging,
   onEndEdit,
   settling,
@@ -44,6 +45,8 @@ function ElementViewInner({
   id: string;
   index: number;
   editing: boolean;
+  /** Under the pointer. Only a text box shows it (§10.9). */
+  hovered?: boolean;
   dragging: boolean;
   onEndEdit: () => void;
   /**
@@ -98,7 +101,14 @@ function ElementViewInner({
           dragging={dragging}
         />
       ) : el.kind === "text" ? (
-        <TextView el={shown} map={map} doc={doc} editing={editing} onEndEdit={onEndEdit} />
+        <TextView
+          el={shown}
+          map={map}
+          doc={doc}
+          editing={editing}
+          hovered={hovered}
+          onEndEdit={onEndEdit}
+        />
       ) : el.kind === "path" ? (
         <PathView el={shown} map={map} stretch={stretchOf(el, shown)} />
       ) : (

@@ -191,6 +191,19 @@ describe("topmostAt", () => {
   it("is null when nothing is under the pointer", () => {
     expect(topmostAt([el({ kind: "note" })], { x: 900, y: 900 }, 1)).toBeNull();
   });
+
+  // Hover runs this on every pointer move, and copying out the samples of
+  // every stroke on the board each time is most of its cost.
+  it("reads a stroke's samples only when the pointer is near it", () => {
+    const near = el({ id: "near", kind: "path" });
+    const far = el({ id: "far", kind: "path", x: 500, y: 500 });
+    const asked: string[] = [];
+    topmostAt([near, far], { x: 50, y: 50 }, 1, (id) => {
+      asked.push(id);
+      return [];
+    });
+    expect(asked).toEqual(["near"]);
+  });
 });
 
 describe("elementsInRect", () => {
