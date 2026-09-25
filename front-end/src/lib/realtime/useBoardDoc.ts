@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
+import type { Role } from "@/lib/api/types";
 import {
   createBoardSession,
   type BoardSession,
@@ -14,6 +15,7 @@ export type BoardDoc = BoardSessionState & {
   awareness: Awareness | null;
   setCursor: (point: { x: number; y: number } | null) => void;
   setSelection: (ids: readonly string[]) => void;
+  setRole: (role: Role) => void;
 };
 
 const IDLE: BoardDoc = {
@@ -27,6 +29,7 @@ const IDLE: BoardDoc = {
   awareness: null,
   setCursor: () => {},
   setSelection: () => {},
+  setRole: () => {},
 };
 
 /**
@@ -57,6 +60,7 @@ function createSessionHolder() {
           awareness: session.awareness,
           setCursor: session.setCursor,
           setSelection: session.setSelection,
+          setRole: session.setRole,
         }
       : IDLE;
     notify();

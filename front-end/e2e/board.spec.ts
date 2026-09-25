@@ -176,3 +176,43 @@ test("losing the connection shows Reconnecting, and coming back says so", async 
   await expect(page.getByText("Back online")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/Reconnecting…/)).toHaveCount(0);
 });
+
+// §10.11 — pressing the cluster lists everyone, with their role.
+test("the avatar cluster lists who's on the board, and who owns it", async ({ browser }) => {
+  const alice = await browser.newContext();
+  const bob = await browser.newContext();
+  const a = await alice.newPage();
+  const b = await bob.newPage();
+
+  try {
+    // Alice makes a board as a guest and claims it by signing in.
+    const url = await newBoard(a);
+    const id = url.split("/").pop()!;
+    await signIn(a, `/board/${id}`);
+    await expect(a).toHaveURL(new RegExp(`/board/${id}$`));
+    await expect(a.getByText(/Expires in/)).toHaveCount(0);
+
+    await b.goto(url);
+    await expect(a.getByTestId("presence-avatar")).toHaveCount(2);
+    await expect(b.getByTestId("presence-avatar")).toHaveCount(2);
+
+    const rows = (page: typeof a) =>
+      page.getByRole("list", { name: "On this board" }).getByRole("listitem");
+
+    await b.getByRole("button", { name: /On this board/ }).click();
+    await expect(rows(b)).toHaveCount(2);
+    await expect(rows(b).nth(0)).toContainText("You · editor");
+    await expect(rows(b).nth(1)).toContainText("· owner");
+
+    await a.getByRole("button", { name: /On this board/ }).click();
+    await expect(rows(a).nth(0)).toContainText("You · owner");
+    await expect(rows(a).nth(1)).toContainText("· editor");
+
+    // Escape closes it.
+    await a.keyboard.press("Escape");
+    await expect(rows(a)).toHaveCount(0);
+  } finally {
+    await alice.close();
+    await bob.close();
+  }
+});

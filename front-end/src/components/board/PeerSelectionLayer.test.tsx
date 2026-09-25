@@ -16,6 +16,7 @@ const peer = (selection: string[], name = "Bo"): PresencePeer => ({
   avatarUrl: null,
   cursor: null,
   selection,
+  role: null,
 });
 
 describe("PeerSelectionLayer", () => {

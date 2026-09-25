@@ -24,10 +24,12 @@ on the server while at least one user is connected. Clients hold a replica and
 exchange Yjs updates with the server over Socket.IO. Yjs handles conflict
 resolution; the server is a relay plus the authority on persistence.
 
-- **Awareness** (live cursors, name, color, and what each person has selected)
-  rides the Yjs awareness protocol — ephemeral, never persisted. The server
-  relays it without reading it, so a new presence field is a front-end change
-  on both ends of the wire and nothing in between.
+- **Awareness** (live cursors, name, color, role, and what each person has
+  selected) rides the Yjs awareness protocol — ephemeral, never persisted. The
+  server relays it without reading it, so a new presence field is a front-end
+  change on both ends of the wire and nothing in between. It follows that
+  every field is the sender's own word: fine for a label, never for a
+  permission, which the server checks against its own records.
 - **Document updates** (shapes, notes, text, strokes) are Yjs updates — applied to
   the in-memory doc and fanned out to other clients in the board room.
 

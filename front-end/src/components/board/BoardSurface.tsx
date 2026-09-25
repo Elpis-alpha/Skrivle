@@ -110,7 +110,8 @@ export function BoardSurface({
     if (!isTypingTarget(event.target) && !isChrome(event.target)) event.preventDefault();
   }, []);
 
-  const { doc, status, hydrated, refusal, self, peers, setCursor, setSelection } = useBoardDoc({
+  const { doc, status, hydrated, refusal, self, peers, setCursor, setSelection, setRole } =
+    useBoardDoc({
     boardId: board.id,
     name,
     avatarUrl: user?.avatarUrl ?? null,
@@ -180,6 +181,12 @@ export function BoardSurface({
   useEffect(() => {
     setSelection(tools.selection);
   }, [tools.selection, doc, setSelection]);
+
+  // Peers list you as owner or editor (§10.11). From the REST record rather
+  // than the socket's join, because claiming the board changes it mid-session.
+  useEffect(() => {
+    setRole(board.role === "owner" ? "owner" : "editor");
+  }, [board.role, doc, setRole]);
 
   useThumbnail(doc, board.id);
 
@@ -444,7 +451,7 @@ export function BoardSurface({
         {/* Tighter below sm: the Share button is the one thing a phone's bar
             can't lose, and at 360px the regular gaps cost it the last few px. */}
         <div className="ml-auto flex shrink-0 items-center gap-3 max-sm:gap-2">
-          <AvatarCluster self={self} peers={peers} />
+          <AvatarCluster self={self} role={board.role} peers={peers} />
           {/* §10.12 — Share is secondary; the label drops to an icon on the
               narrowest phones, where the bar is already full. */}
           <Button variant="secondary" size="sm" onClick={() => setSharing(true)}>

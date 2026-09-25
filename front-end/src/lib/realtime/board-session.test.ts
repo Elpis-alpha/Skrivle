@@ -360,4 +360,37 @@ describe("createBoardSession", () => {
 
     expect(session.getSnapshot().peers[0].selection).toEqual(["a", "b"]);
   });
+  // Owner or editor, shown in the avatar cluster's list (§10.11).
+  it("publishes our role over awareness", () => {
+    const s = start();
+    s.setRole("owner");
+    expect((s.awareness.getLocalState() as { role: string }).role).toBe("owner");
+  });
+
+  // board:joined rebuilds the local state; the role must survive it.
+  it("keeps our role when the server says we've joined", () => {
+    const s = start();
+    s.setRole("owner");
+    socket.receive(EVENTS.BOARD_JOINED, JOINED);
+    expect((s.awareness.getLocalState() as { role: string }).role).toBe("owner");
+  });
+
+  it("surfaces a peer's role, and a role it doesn't know as none", () => {
+    const peer = (role: unknown) => {
+      const theirDoc = new Y.Doc();
+      const theirAwareness = new Awareness(theirDoc);
+      theirAwareness.setLocalState({ name: "Bo", color: "coral", signedIn: false, cursor: null, role });
+      socket.receive(
+        EVENTS.AWARENESS_UPDATE,
+        encodeAwarenessUpdate(theirAwareness, [theirDoc.clientID]),
+      );
+      return theirDoc.clientID;
+    };
+    const owner = peer("owner");
+    const odd = peer("admin");
+
+    const roles = new Map(session.getSnapshot().peers.map((p) => [p.clientId, p.role]));
+    expect(roles.get(owner)).toBe("owner");
+    expect(roles.get(odd)).toBeNull();
+  });
 });

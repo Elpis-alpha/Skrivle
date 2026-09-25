@@ -2,6 +2,7 @@
 //
 // Ephemeral by design: awareness is never persisted (docs/ARCHITECTURE.md).
 
+import type { Role } from "@/lib/api/types";
 import { CURSOR_COLORS, type CursorColor } from "@/lib/presence-colors";
 
 export type Cursor = { x: number; y: number; t: number };
@@ -21,6 +22,12 @@ export type PresenceState = {
    * working on. Optional: a peer on an older build never sends it.
    */
   selection?: string[];
+  /**
+   * Owner or editor, for the avatar cluster's list (§10.11). Self-reported,
+   * like the name, so it's a label and never a permission: the server checks
+   * roles for itself. Optional: a peer on an older build never sends it.
+   */
+  role?: Role;
 };
 
 /**
@@ -41,6 +48,8 @@ export type PresencePeer = {
   cursor: Cursor | null;
   /** Never missing: a peer that sent nothing, or something malformed, has none. */
   selection: string[];
+  /** Null when a peer sent none, or one this build doesn't know. */
+  role: Role | null;
 };
 
 /** A peer's selection as sent, trusted only as far as its shape can be checked. */
@@ -49,6 +58,10 @@ function selectionFrom(raw: unknown): string[] {
   return raw
     .filter((id): id is string => typeof id === "string")
     .slice(0, MAX_SHARED_SELECTION);
+}
+
+function roleFrom(raw: unknown): Role | null {
+  return raw === "owner" || raw === "editor" ? raw : null;
 }
 
 /**
@@ -89,6 +102,7 @@ export function peersFrom(
       avatarUrl: state.avatarUrl ?? null,
       cursor: state.cursor ?? null,
       selection: selectionFrom(state.selection),
+      role: roleFrom(state.role),
     });
   }
 

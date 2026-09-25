@@ -506,7 +506,10 @@ Top-right of the board bar. Overlapping 24px circles (−8px overlap), each a
 `label`-hue disc with white initials or the OAuth avatar image. **Your** avatar
 has a 2px `--accent-500` ring. Beyond 4, collapse to `+N` chip
 (`--wg-100` bg, `--ink-secondary`). Hover → name tooltip. Click the cluster →
-a list popover ("Maya · editor", "You · owner").
+a list popover ("Maya · editor", "You · owner") of everyone, including those
+behind the `+N`: you first, the role in `--ink-muted`. Anyone with no role on
+record is an editor, since the link lets them edit. Esc or a press elsewhere
+closes it.
 
 ### 10.12 Board top bar
 

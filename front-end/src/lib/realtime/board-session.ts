@@ -14,6 +14,7 @@ import {
   removeAwarenessStates,
 } from "y-protocols/awareness";
 import { API_URL } from "@/lib/api/config";
+import type { Role } from "@/lib/api/types";
 import type { CursorColor } from "@/lib/presence-colors";
 import {
   EVENTS,
@@ -126,6 +127,8 @@ export type BoardSession = {
   setCursor: (point: { x: number; y: number } | null) => void;
   /** Publish what we have selected, so peers can see it. Capped; deduplicated. */
   setSelection: (ids: readonly string[]) => void;
+  /** Publish whether we own the board, for peers' avatar lists. */
+  setRole: (role: Role) => void;
   destroy: () => void;
 };
 
@@ -379,6 +382,14 @@ export function createBoardSession(
     awareness.setLocalStateField("selection", next);
   }
 
+  // --- local role -----------------------------------------------------------
+
+  function setRole(role: Role): void {
+    if (destroyed) return;
+    if ((awareness.getLocalState() as PresenceState | null)?.role === role) return;
+    awareness.setLocalStateField("role", role);
+  }
+
   // --- teardown -------------------------------------------------------------
 
   function destroy(): void {
@@ -415,6 +426,7 @@ export function createBoardSession(
     getSnapshot: () => state,
     setCursor,
     setSelection,
+    setRole,
     destroy,
   };
 }

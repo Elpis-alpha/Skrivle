@@ -97,7 +97,9 @@ the v1 scope.
 - [x] "Back online" toast (§10.21). The reconnect bar no longer says "saved
   locally", which was only true in memory; it says to keep the tab open until
   offline persistence lands
-- [ ] Avatar cluster popover: who's here, and their role (§10.11)
+- [x] Avatar cluster popover: who's here, and their role (§10.11). Each person
+  publishes owner or editor over awareness, taken from the board's REST record
+  so a claim updates it
 - [ ] My Boards tile menu — Rename, Delete with a confirm, Duplicate (needs a copy
   endpoint) — and "edited 2h ago" (§10.15)
 
