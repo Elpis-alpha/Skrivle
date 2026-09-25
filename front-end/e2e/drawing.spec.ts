@@ -127,6 +127,48 @@ test("a text box opens for typing and only grows when its text needs room", asyn
   expect(errors).toEqual([]);
 });
 
+test("a note or text box reopens for typing", async ({ page }) => {
+  await newBoard(page);
+
+  await pickTool(page, "n");
+  await page.mouse.click(...(await canvasAt(page, 300, 300)));
+  const note = page.locator('[data-kind="note"]');
+  await page.keyboard.type("hello");
+  await page.keyboard.press("Escape");
+  await expect(note.locator("textarea")).toHaveCount(0);
+
+  // §10.7 — double-click enters text edit, picking up after what's there.
+  await page.mouse.click(...(await canvasAt(page, 700, 500)));
+  await page.mouse.dblclick(...(await canvasAt(page, 300, 300)));
+  await expect(note.locator("textarea")).toBeFocused();
+  await page.keyboard.type(" again");
+  await expect(note.locator("textarea")).toHaveValue("hello again");
+
+  // Enter does the same from the keyboard, for the one element selected.
+  await page.keyboard.press("Escape");
+  await expect(note.locator("textarea")).toHaveCount(0);
+  await page.keyboard.press("Enter");
+  await expect(note.locator("textarea")).toBeFocused();
+  // …without typing the Enter into it.
+  await expect(note.locator("textarea")).toHaveValue("hello again");
+  await page.keyboard.press("Escape");
+
+  // The Text tool on existing text edits it, rather than stacking a new box on
+  // top of it.
+  await pickTool(page, "t");
+  await page.mouse.click(...(await canvasAt(page, 600, 200)));
+  await page.keyboard.type("label");
+  await page.keyboard.press("Escape");
+
+  await pickTool(page, "t");
+  await page.mouse.click(...(await canvasAt(page, 610, 210)));
+  const text = page.locator('[data-kind="text"]');
+  await expect(text).toHaveCount(1);
+  await expect(text.locator("textarea")).toBeFocused();
+  await page.keyboard.type("!");
+  await expect(text.locator("textarea")).toHaveValue("label!");
+});
+
 test("what one person draws, the other sees", async ({ browser }) => {
   const alice = await browser.newContext();
   const bob = await browser.newContext();

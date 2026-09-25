@@ -29,6 +29,7 @@ import type { BoardWithRole } from "@/lib/api/types";
 import { displayNameFor } from "@/lib/board/guest-name";
 import { centredOn, copyPayload, nudged, parsePayload } from "@/lib/board/clipboard";
 import {
+  holdsText,
   insertElements,
   readElement,
   removeElements,
@@ -285,6 +286,19 @@ export function BoardSurface({
 
       if (event.key === "Escape") {
         dispatch({ type: "clear" });
+        return;
+      }
+
+      // The keyboard's way to the double-click: open the one selected note or
+      // text box for typing. preventDefault, or the Enter lands in it as a
+      // newline once it has focus.
+      if (event.key === "Enter" && doc && tools.selection.length === 1) {
+        const id = tools.selection[0];
+        const map = elements(doc).get(id);
+        if (map && holdsText(readElement(id, map).kind)) {
+          event.preventDefault();
+          dispatch({ type: "edit", id });
+        }
         return;
       }
 

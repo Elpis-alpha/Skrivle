@@ -63,6 +63,9 @@ export function readElement(id: string, map: ElementMap): ElementSnapshot {
   };
 }
 
+/** Whether an element holds text someone can type into: a note or a text box. */
+export const holdsText = (kind: ElementKind): boolean => kind === "note" || kind === "text";
+
 export function textOf(map: ElementMap): Y.Text | null {
   const text = map.get("text");
   return text instanceof Y.Text ? text : null;

@@ -9,12 +9,13 @@
 // person drawing — Socket.IO sends a binary event as two frames — and there is
 // no rate limiting anywhere upstream to absorb it.
 
-import { useCallback, useState, type RefObject } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
 import type * as Y from "yjs";
 import {
   appendPoints,
   createElement,
   createNote,
+  holdsText,
   moveBy,
   pointsOf,
   readElement,
@@ -52,6 +53,26 @@ const DEFAULT_TEXT_WIDTH = 220;
 /** How close to a handle counts as grabbing it, in screen pixels. */
 const HANDLE_GRAB = 10;
 
+/**
+ * §10.7 — two presses on one note or text box this close together, in time and
+ * on screen, open it for typing.
+ *
+ * Counted here rather than from a native dblclick, which would arrive after the
+ * second release and from outside the one pointerdown path — and would still
+ * count a press, a drag, and a press on wherever the note landed.
+ */
+export const DOUBLE_PRESS_MS = 500;
+const DOUBLE_PRESS_SLOP = 6;
+
+/** A press on an element: which one, when, and where on the board. */
+export type Press = { id: string; at: number } & Point;
+
+export function isDoublePress(last: Press | null, next: Press, scale: number): boolean {
+  if (!last || last.id !== next.id) return false;
+  if (next.at - last.at > DOUBLE_PRESS_MS) return false;
+  return Math.hypot(next.x - last.x, next.y - last.y) * scale <= DOUBLE_PRESS_SLOP;
+}
+
 export function useBoardTools({
   doc,
   hostRef,
@@ -78,6 +99,9 @@ export function useBoardTools({
   // than a ref because it has to reach the note, and it changes twice per drag
   // rather than per frame.
   const [draggingIds, setDraggingIds] = useState<readonly string[]>(NOTHING);
+
+  /** The last press that landed on an element, for telling a double press. */
+  const lastPress = useRef<Press | null>(null);
 
   const begin = useCallback<BeginDrag>(
     (start, event) => {
@@ -115,6 +139,16 @@ export function useBoardTools({
 
       if (tool === "pen") return beginStroke(doc, start, style, dispatch, host);
 
+      // The Text tool on text that's already there edits it, rather than
+      // stacking a new, empty box on top of it.
+      if (tool === "text") {
+        const hit = topmostAt(snapshots(), start, scale, pointsFor);
+        if (hit && holdsText(hit.kind)) {
+          dispatch({ type: "edit", id: hit.id });
+          return null;
+        }
+      }
+
       if (tool === "rect" || tool === "ellipse" || tool === "line" || tool === "text") {
         return beginDrawOut(doc, start, tool, style, dispatch, preview);
       }
@@ -132,11 +166,23 @@ export function useBoardTools({
       const hit = topmostAt(all, start, scale, pointsFor);
 
       if (!hit) {
+        lastPress.current = null;
         dispatch({ type: "clear" });
         return beginMarquee(start, all, marqueeRef, store, dispatch);
       }
 
       const additive = event.shiftKey;
+
+      const press: Press = { id: hit.id, at: event.timeStamp, x: start.x, y: start.y };
+      const double =
+        !additive && holdsText(hit.kind) && isDoublePress(lastPress.current, press, scale);
+      // A third press starts counting again rather than opening it twice.
+      lastPress.current = double ? null : press;
+      if (double) {
+        dispatch({ type: "edit", id: hit.id });
+        return null;
+      }
+
       const already = selection.includes(hit.id);
 
       if (additive) {

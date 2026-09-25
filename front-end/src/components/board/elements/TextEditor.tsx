@@ -104,7 +104,12 @@ export function TextEditor({
   });
 
   useEffect(() => {
-    if (editing) ref.current?.focus();
+    const field = ref.current;
+    if (!editing || !field) return;
+    field.focus();
+    // Reopening a note picks up after what's already in it.
+    const end = field.value.length;
+    field.setSelectionRange(end, end);
   }, [editing]);
 
   // §10.7 — a note grows downward as it fills up, and so does a text box.

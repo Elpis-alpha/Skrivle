@@ -6,7 +6,14 @@ import { createElement, orderedIds, pointsOf, readElement } from "./elements";
 import { createPreviewStore, type PreviewStore } from "./preview";
 import { DEFAULT_STYLE } from "./tools";
 import { strokeOutline } from "./stroke";
-import { beginDrawOut, beginMove, beginResize, beginStroke } from "./useBoardTools";
+import {
+  beginDrawOut,
+  beginMove,
+  beginResize,
+  beginStroke,
+  DOUBLE_PRESS_MS,
+  isDoublePress,
+} from "./useBoardTools";
 
 let doc: Y.Doc;
 let preview: PreviewStore;
@@ -169,5 +176,37 @@ describe("beginStroke", () => {
     vi.advanceTimersToNextFrame();
 
     expect(ink.getAttribute("d")).toBe(strokeOutline([0, 0, 5, 2, 10, 5], 4));
+  });
+});
+
+describe("isDoublePress", () => {
+  const first = { id: "a", at: 1000, x: 100, y: 100 };
+
+  it("counts a second press on the same element, soon after, in the same place", () => {
+    expect(isDoublePress(first, { ...first, at: first.at + 200 }, 1)).toBe(true);
+  });
+
+  it("needs a first press", () => {
+    expect(isDoublePress(null, first, 1)).toBe(false);
+  });
+
+  it("doesn't count a press after the window has passed", () => {
+    expect(isDoublePress(first, { ...first, at: first.at + DOUBLE_PRESS_MS + 1 }, 1)).toBe(false);
+  });
+
+  it("doesn't count a press on a different element", () => {
+    expect(isDoublePress(first, { ...first, id: "b", at: first.at + 200 }, 1)).toBe(false);
+  });
+
+  // Press, drag the note away, press it again where it landed: two presses on
+  // one element inside the window, and not a double-click.
+  it("doesn't count a press somewhere else on the same element", () => {
+    expect(isDoublePress(first, { ...first, at: first.at + 200, x: 140 }, 1)).toBe(false);
+  });
+
+  it("measures the distance on screen, not on the board", () => {
+    const next = { ...first, at: first.at + 200, x: first.x + 4 };
+    expect(isDoublePress(first, next, 1)).toBe(true);
+    expect(isDoublePress(first, next, 4)).toBe(false);
   });
 });
