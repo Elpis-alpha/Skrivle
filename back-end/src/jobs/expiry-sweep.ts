@@ -5,6 +5,7 @@
 // by a cascade takes the board_docs blob with it, but Cloudinary knows nothing
 // about Postgres, so the asset has to be removed explicitly.
 import { prisma } from "../db/prisma.js";
+import { reportError } from "../errors/report.js";
 import { deleteAssets, publicIdFor } from "../media/cloudinary.js";
 import { peekDoc } from "../realtime/doc-manager.js";
 
@@ -81,7 +82,7 @@ export async function sweepExpiredBoards(now = new Date()): Promise<SweepResult>
 
     if (deleted > 0) console.log(`[skrivle] expiry sweep removed ${deleted} board(s)`);
   } catch (err) {
-    console.error("[skrivle] expiry sweep failed:", err instanceof Error ? err.message : err);
+    reportError("expiry-sweep", err);
   }
 
   return { deleted, skipped };

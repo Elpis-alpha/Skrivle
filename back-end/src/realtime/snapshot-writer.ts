@@ -10,6 +10,7 @@
 // from a corrupt write at the cost of an ever-growing table and an index scan
 // on every rehydrate.
 import * as Y from "yjs";
+import { reportError } from "../errors/report.js";
 import { saveDocState } from "./board-store.js";
 import { clearDirty, dirtyBoardIds, markDirty, peekDoc } from "./doc-manager.js";
 
@@ -48,7 +49,7 @@ export async function flushDirty(): Promise<void> {
   const results = await Promise.allSettled(ids.map((id) => persistSnapshot(id)));
   const failed = results.filter((r) => r.status === "rejected");
   for (const failure of failed) {
-    console.error("[skrivle] snapshot failed:", (failure as PromiseRejectedResult).reason);
+    reportError("snapshot", (failure as PromiseRejectedResult).reason);
   }
   if (failed.length > 0) {
     console.error(`[skrivle] snapshot flush: ${failed.length}/${ids.length} boards failed`);

@@ -62,6 +62,8 @@ tags:
     description: Signed direct-to-Cloudinary uploads.
   - name: Me
     description: The signed-in user's own profile.
+  - name: Errors
+    description: Errors the browser ran into, reported to the server's log.
 
 components:
   securitySchemes:
@@ -196,6 +198,33 @@ components:
         publicId:
           type: string
           description: Deterministic id derived from the board or user id.
+
+    ErrorReport:
+      type: object
+      required: [source, message, path]
+      properties:
+        source:
+          type: string
+          enum: [boundary, window, promise]
+          description: |
+            What caught it: a React error boundary, `window.onerror`, or an
+            unhandled promise rejection.
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        stack:
+          type: string
+          maxLength: 8000
+        digest:
+          type: string
+          maxLength: 200
+          description: Next.js's hash of an error thrown while rendering on the server.
+        path:
+          type: string
+          maxLength: 500
+          description: The page's path, without its query or fragment.
+          example: /board/abcde
 
   responses:
     BadRequest:
@@ -827,3 +856,22 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+
+  /api/errors:
+    post:
+      tags: [Errors]
+      summary: Report an error the browser ran into
+      description: |
+        Writes the report to the server's log, as one line in the same format as
+        the API's own errors. No session is needed. A report longer than the
+        limits below is refused, not cut short.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ErrorReport" }
+      responses:
+        "204":
+          description: Logged.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }

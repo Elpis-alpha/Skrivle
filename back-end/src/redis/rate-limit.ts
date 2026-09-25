@@ -3,7 +3,7 @@
 // Fixed-window (INCR + EXPIRE) rather than a sliding log or token bucket: it is
 // two commands and one key, and its only real weakness — up to 2x the limit
 // across a window boundary — does not matter for the things being limited here
-// (sign-in email sends, board creation, id enumeration).
+// (sign-in email sends, board creation, id enumeration, error reports).
 import type { NextFunction, Request, Response } from "express";
 import { hashToken } from "../auth/hash.js";
 import { keys } from "./keys.js";
@@ -118,4 +118,5 @@ export const RULES = {
   boardCreatePerIp: { bucket: "board:new", limit: 30, windowSeconds: 3600 },
   availabilityPerIp: { bucket: "board:avail", limit: 60, windowSeconds: 60 },
   uploadSignPerSession: { bucket: "upload:sign", limit: 60, windowSeconds: 3600 },
+  errorReportPerIp: { bucket: "errors:ip", limit: 30, windowSeconds: 3600 },
 } as const satisfies Record<string, RateLimitRule>;

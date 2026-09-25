@@ -22,6 +22,7 @@ import {
   setSessionCookie,
 } from "../../auth/session.js";
 import { config, devSignInCodes, featureEnabled } from "../../config/env.js";
+import { reportError } from "../../errors/report.js";
 import { signInCodeEmail } from "../../mail/templates.js";
 import { sendMail } from "../../mail/transport.js";
 import { consume, limitByIp, RULES, tooMany } from "../../redis/rate-limit.js";
@@ -201,7 +202,7 @@ authRouter.get("/callback/:provider", async (req, res) => {
 function oauthErrorCode(err: unknown): string {
   if (err instanceof NoVerifiedEmail) return "no_verified_email";
   if (err instanceof UnverifiedEmailCollision) return "email_in_use";
-  console.error("[skrivle] OAuth callback failed:", err);
+  reportError("oauth-callback", err);
   return "signin_failed";
 }
 

@@ -35,6 +35,7 @@ import { findBoardLifecycle, isExpired, touchCollaborator } from "../boards/serv
 import { normalizeBoardId } from "../boards/board-id.js";
 import { config } from "../config/env.js";
 import { prisma } from "../db/prisma.js";
+import { reportError } from "../errors/report.js";
 import { colorForJoinOrder } from "../presence/cursor-colors.js";
 import { EVENTS } from "../protocol/events.js";
 
@@ -115,7 +116,7 @@ export function attachGateway(httpServer: HttpServer): IOServer {
       });
       next();
     } catch (err) {
-      console.error("[skrivle] socket handshake failed:", err);
+      reportError("socket-handshake", err);
       next(new Error("handshake_failed"));
     }
   });
@@ -142,7 +143,7 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
   } catch (err) {
     // A board whose stored document will not load must not be served as a blank
     // canvas — that would let the first edit overwrite it with nothing.
-    console.error(`[skrivle] could not load board ${boardId}:`, err);
+    reportError("board-load", err, { boardId });
     named(socket, "This board's canvas couldn't be loaded.", "Refresh in a moment; the work is still saved.");
     socket.disconnect(true);
     return;
@@ -231,11 +232,11 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
         const roomEmpty = untrackSocket(boardId, socket.id);
         if (roomEmpty) void releaseBoard(boardId);
       } catch (err) {
-        console.error(`[skrivle] disconnect cleanup failed for board ${boardId}:`, err);
+        reportError("socket-disconnect", err, { boardId });
       }
     });
   } catch (err) {
-    console.error(`[skrivle] failed to join board ${boardId}:`, err);
+    reportError("board-join", err, { boardId });
     named(socket, "Something went wrong joining this board.", "Refresh to try again.");
     socket.disconnect(true);
   }
@@ -251,7 +252,7 @@ async function releaseBoard(boardId: string): Promise<void> {
   try {
     await persistSnapshot(boardId);
   } catch (err) {
-    console.error(`[skrivle] final snapshot for ${boardId} failed:`, err);
+    reportError("board-release", err, { boardId });
     // Keep the doc in memory rather than dropping unsaved work; the periodic
     // sweep will try again.
     return;
@@ -263,7 +264,7 @@ async function releaseBoard(boardId: string): Promise<void> {
     releaseAwareness(boardId);
     joinCounters.delete(boardId);
   } catch (err) {
-    console.error(`[skrivle] cleanup after releasing board ${boardId} failed:`, err);
+    reportError("board-release", err, { boardId, step: "cleanup" });
   }
 }
 

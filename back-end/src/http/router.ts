@@ -2,6 +2,7 @@
 import { Router } from "express";
 import { authRouter } from "./routes/auth.js";
 import { boardsRouter } from "./routes/boards.js";
+import { errorsRouter } from "./routes/errors.js";
 import { meRouter } from "./routes/me.js";
 import { uploadsRouter } from "./routes/uploads.js";
 
@@ -11,3 +12,4 @@ apiRouter.use("/boards", boardsRouter);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/uploads", uploadsRouter);
 apiRouter.use("/me", meRouter);
+apiRouter.use("/errors", errorsRouter);

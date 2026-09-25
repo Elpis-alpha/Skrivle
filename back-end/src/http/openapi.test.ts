@@ -34,6 +34,7 @@ const EXPECTED_OPERATIONS: [string, string][] = [
   ["post", "/api/boards/{id}/thumbnail"],
   ["post", "/api/uploads/signature"],
   ["patch", "/api/me"],
+  ["post", "/api/errors"],
 ];
 
 describe("GET /api/openapi.json", () => {

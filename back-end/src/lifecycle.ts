@@ -8,6 +8,8 @@
 // Hooks register themselves rather than being imported here, so this module
 // stays free of dependencies on the subsystems it drains.
 
+import { reportError } from "./errors/report.js";
+
 type ShutdownHook = {
   name: string;
   run: () => Promise<void> | void;
@@ -81,10 +83,10 @@ export function installSignalHandlers(): void {
   // Without these, an async throw anywhere kills the process instantly and
   // takes every unflushed board with it.
   process.on("unhandledRejection", (reason) => {
-    console.error("[skrivle] unhandled rejection:", reason);
+    reportError("unhandled-rejection", reason);
   });
   process.on("uncaughtException", (err) => {
-    console.error("[skrivle] uncaught exception:", err);
+    reportError("uncaught-exception", err);
     void shutdown("uncaughtException");
   });
 }

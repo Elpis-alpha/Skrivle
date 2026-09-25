@@ -113,6 +113,7 @@ POST   /api/boards/:id/thumbnail     { publicId }     -> { thumbnailUrl }
 
 POST   /api/uploads/signature        { kind, boardId? } -> Cloudinary params
 PATCH  /api/me                       { name?, avatarPublicId? }
+POST   /api/errors                   { source, message, stack?, digest?, path } -> 204
 ```
 
 Interactive reference (Scalar) at **`/docs`**; the raw document at
@@ -136,6 +137,11 @@ board is chosen in the Socket.IO **handshake**, not by an event.
 - **OAuth is hand-rolled** for two providers (~150 LOC in `src/auth/oauth/`)
   rather than pulled from a library. Linking across providers requires a
   provider-*verified* email.
+- **Errors are reported to this process's own log**, not to an error service.
+  Every unexpected error — the API's, and those the browser posts to
+  `/api/errors` — is one `[skrivle] error {json}` line, so
+  `docker compose logs back-end | grep '\[skrivle\] error '` lists them all.
+  `src/errors/report.ts` has the format.
 
 ## Testing
 
