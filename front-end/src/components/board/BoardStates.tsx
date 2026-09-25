@@ -165,3 +165,24 @@ export function BoardUnreachable({
     </StateCard>
   );
 }
+
+/**
+ * A render error anywhere on the board (app/(product)/board/[id]/error.tsx).
+ * Edits reach the server as they're made, so what synced before the error is
+ * safe; reloading opens a fresh session on it.
+ */
+export function BoardCrashed({ onReload }: { onReload: () => void }) {
+  return (
+    <StateCard
+      title="This board hit an error."
+      body="Everything that synced before the error is saved. Reload the board to carry on."
+    >
+      <Button variant="primary" size="sm" onClick={onReload}>
+        Reload board
+      </Button>
+      <Button href="/" variant="ghost" size="sm">
+        Back to home
+      </Button>
+    </StateCard>
+  );
+}
