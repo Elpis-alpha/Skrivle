@@ -79,13 +79,15 @@ the v1 scope.
 
 **Editing basics**
 
-- [ ] Arrow keys nudge the selection (1px, Shift for 10px), one undo step per
-  burst; Cmd/Ctrl+A selects all
-- [ ] Z-order: `]` / `[` bring to front / send to back, Cmd for one step — writes
+- [x] Arrow keys nudge the selection (1px, Shift for 10px), one undo step per
+  burst; Cmd/Ctrl+A selects all. A style change, and typing into a note
+  reopened with Enter, are now their own undo steps too
+- [x] Z-order: `]` / `[` bring to front / send to back, Cmd for one step — writes
   only `order`, which is kept separate for exactly this
-- [ ] An empty text box is removed when editing ends
-- [ ] Touch: pinch-zoom and two-finger pan (`useBoardGestures` ignores a second
-  pointer today)
+- [x] An empty text box is removed when editing ends, in the undo step that made
+  it, so Cmd+Z doesn't bring it back
+- [x] Touch: pinch-zoom and two-finger pan. A cancelled gesture now takes back
+  what it did, and a note is placed on release, so a pinch leaves nothing behind
 
 **Style guide, not yet kept**
 

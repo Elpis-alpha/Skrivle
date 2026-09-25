@@ -447,6 +447,11 @@ dialog says so once, quietly.
 - Active tool: `--accent-subtle` bg, `--accent-400` icon, `--radius-sm`.
 - Hover shows the tool name + shortcut key in a tooltip (`V` select, `H` hand,
   `N` note, `T` text, `R` rectangle, `O` circle, `L` line/arrow, `P` pen).
+- Keys on the canvas that act on the selection, with no control of their own:
+  arrows nudge it 1px (`Shift` for 10px), a run of presses being one undo step;
+  `]` / `[` bring it to the front / send it to the back, and `Ctrl/⌘ ]` /
+  `Ctrl/⌘ [` one step at a time; `Ctrl/⌘ A` selects everything; `Enter` opens
+  a note or text box (§10.7); `Delete` removes it.
 - Collapses to an icon that opens the full pill below 480px width.
 
 ### 10.6 Color / stroke picker
@@ -484,6 +489,8 @@ solid `--accent`). Placeholder `--ink-muted` "Type something". `text-base` to
 `text-2xl` via the size control; color from the stroke picker. Grows downward as
 it fills, like a note. Reopened the note's way (§10.7), and also by pressing on
 it with the Text tool, which edits it rather than placing a new box on top.
+Left empty, it's removed as editing ends, rather than staying as a stray
+"Type something".
 
 ### 10.10 Remote cursor + name tag
 
@@ -600,6 +607,8 @@ the readout is `text-xs` `tabular-nums`, and pressing it returns to 100%.
   the direction pressed.
 - Keys on the canvas: `Ctrl/⌘ =` and `Ctrl/⌘ −` zoom about the middle of the
   view, `Shift 0` returns to 100%, `Shift 1` fits everything on the board.
+- On touch, two fingers pinch to zoom and drag to pan. Whatever a first finger
+  had started is taken back, since it was on its way to a pinch.
 - Camera moves the user asked for glide over `--dur-slow` and give way to any
   wheel or pan mid-glide; reduced motion jumps.
 - Fit never zooms past 100%, and a board opens fitted to its content when none
