@@ -15,6 +15,12 @@
 // reopens the session when the display name changes, which is what signing in
 // mid-board does — so an id-keyed cache would quietly serve a snapshot built
 // from a destroyed document.
+//
+// The doc clears those caches, not the subscriptions. A subscription only exists
+// once React has committed, and a child's mount effect runs before its parent's,
+// so a write the text editor makes as it opens lands before the element above
+// it has subscribed. React re-reads a store once it subscribes, but a cache
+// that only a subscription could have cleared hands the old snapshot back.
 
 import { useCallback, useSyncExternalStore } from "react";
 import * as Y from "yjs";
@@ -46,6 +52,46 @@ const EMPTY_IDS: readonly string[] = Object.freeze([]);
 
 const alive = (doc: Y.Doc | null): doc is Y.Doc => doc !== null && !doc.isDestroyed;
 
+const watched = new WeakSet<Y.Doc>();
+
+/**
+ * Keep this doc's snapshot caches current, whoever is subscribed.
+ *
+ * `beforeObserverCalls` runs after a transaction has applied and before any
+ * observer, so by the time a subscription hears about a change, the snapshot
+ * it reads is already rebuilt.
+ */
+function watch(doc: Y.Doc): void {
+  if (watched.has(doc)) return;
+  watched.add(doc);
+  const els = elements(doc);
+  const list = order(doc);
+
+  doc.on("beforeObserverCalls", (transaction: Y.Transaction) => {
+    const remote = !transaction.local;
+    transaction.changed.forEach((keys, type) => {
+      if (type instanceof Y.Text) {
+        textCache.delete(type);
+      } else if (type instanceof Y.Array) {
+        if (type === list) idsCache.delete(doc);
+      } else if (type instanceof Y.Map) {
+        if (type !== els) {
+          elementCache.delete(type);
+          lastChangeRemote.set(type, remote);
+          return;
+        }
+        idsCache.delete(doc);
+        // Added, removed or replaced. An element created in this transaction is
+        // never in `changed` itself, so it is flagged through its parent.
+        for (const id of keys) {
+          const map = id === null ? undefined : els.get(id);
+          if (map) lastChangeRemote.set(map, remote);
+        }
+      }
+    });
+  });
+}
+
 const NO_OP = () => () => {};
 
 /** The ids to paint, in order. Re-renders when elements are added, removed or reordered. */
@@ -55,15 +101,11 @@ export function useElementIds(doc: Y.Doc | null): readonly string[] {
       if (!alive(doc)) return NO_OP();
       const els = elements(doc);
       const list = order(doc);
-      const fire = () => {
-        idsCache.delete(doc);
-        onChange();
-      };
-      els.observe(fire);
-      list.observe(fire);
+      els.observe(onChange);
+      list.observe(onChange);
       return () => {
-        els.unobserve(fire);
-        list.unobserve(fire);
+        els.unobserve(onChange);
+        list.unobserve(onChange);
       };
     },
     [doc],
@@ -71,6 +113,7 @@ export function useElementIds(doc: Y.Doc | null): readonly string[] {
 
   const getSnapshot = useCallback(() => {
     if (!alive(doc)) return EMPTY_IDS;
+    watch(doc);
     let cached = idsCache.get(doc);
     if (!cached) {
       cached = Object.freeze(orderedIds(doc));
@@ -97,31 +140,23 @@ export function useElement(doc: Y.Doc | null, id: string): ElementSnapshot | nul
       const els = elements(doc);
       let bound = els.get(id) ?? null;
 
-      const fire = (_event?: unknown, transaction?: Y.Transaction) => {
-        if (bound) {
-          elementCache.delete(bound);
-          if (transaction) lastChangeRemote.set(bound, !transaction.local);
+      // An element can be replaced rather than merely changed — undoing a
+      // delete puts a different Y.Map at the same id — so the subscription has
+      // to follow it.
+      const onParentChange = () => {
+        const next = els.get(id) ?? null;
+        if (next !== bound) {
+          bound?.unobserve(onChange);
+          bound = next;
+          bound?.observe(onChange);
         }
         onChange();
       };
 
-      // An element can be replaced rather than merely changed — undoing a
-      // delete puts a different Y.Map at the same id — so the subscription has
-      // to follow it.
-      const onParentChange = (event: unknown, transaction: Y.Transaction) => {
-        const next = els.get(id) ?? null;
-        if (next !== bound) {
-          bound?.unobserve(fire);
-          bound = next;
-          bound?.observe(fire);
-        }
-        fire(event, transaction);
-      };
-
-      bound?.observe(fire);
+      bound?.observe(onChange);
       els.observe(onParentChange);
       return () => {
-        bound?.unobserve(fire);
+        bound?.unobserve(onChange);
         els.unobserve(onParentChange);
       };
     },
@@ -130,6 +165,7 @@ export function useElement(doc: Y.Doc | null, id: string): ElementSnapshot | nul
 
   const getSnapshot = useCallback(() => {
     if (!alive(doc)) return null;
+    watch(doc);
     const map = elements(doc).get(id);
     if (!map) return null;
     let cached = elementCache.get(map);
@@ -175,18 +211,15 @@ export function useYText(text: Y.Text | null): string {
   const subscribe = useCallback(
     (onChange: () => void) => {
       if (!text) return NO_OP();
-      const fire = () => {
-        textCache.delete(text);
-        onChange();
-      };
-      text.observe(fire);
-      return () => text.unobserve(fire);
+      text.observe(onChange);
+      return () => text.unobserve(onChange);
     },
     [text],
   );
 
   const getSnapshot = useCallback(() => {
     if (!text) return "";
+    if (text.doc) watch(text.doc);
     let cached = textCache.get(text);
     if (cached === undefined) {
       // A peer can delete the element out from under an open editor; reading a

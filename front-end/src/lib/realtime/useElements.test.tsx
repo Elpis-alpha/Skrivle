@@ -1,4 +1,5 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, render, renderHook } from "@testing-library/react";
+import { useEffect } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import {
@@ -221,5 +222,59 @@ describe("useYText", () => {
 
     asPeer(() => applyTextEdit(doc, text, "hello"));
     expect(result.current).toBe("hello");
+  });
+});
+
+// React runs a child's effects before its parent's, so a child that writes to
+// the doc on mount — the text editor growing its box, say — lands between the
+// parent's first read and its subscription. React re-reads once it subscribes,
+// but that only helps if the cache already knows about the write.
+describe("a change made before the subscription exists", () => {
+  /** Runs `write` in an effect below whatever renders it. */
+  function OnMount({ write }: { write: () => void }) {
+    useEffect(write, [write]);
+    return null;
+  }
+
+  it("still reaches useElement", () => {
+    const id = createElement(doc, rect);
+    const grow = () => updateElement(doc, id, { h: 80 });
+    let seen: ReturnType<typeof useElement> = null;
+    function Watch() {
+      seen = useElement(doc, id);
+      return <OnMount write={grow} />;
+    }
+
+    render(<Watch />);
+    expect(seen).toMatchObject({ h: 80 });
+  });
+
+  it("still reaches useElementIds", () => {
+    let added = "";
+    const add = () => {
+      added = createElement(doc, rect);
+    };
+    let seen: readonly string[] = [];
+    function Watch() {
+      seen = useElementIds(doc);
+      return <OnMount write={add} />;
+    }
+
+    render(<Watch />);
+    expect(seen).toEqual([added]);
+  });
+
+  it("still reaches useYText", () => {
+    const id = createElement(doc, { ...rect, kind: "note", withText: true });
+    const text = textOf(elements(doc).get(id)!)!;
+    const type = () => applyTextEdit(doc, text, "typed");
+    let seen = "";
+    function Watch() {
+      seen = useYText(text);
+      return <OnMount write={type} />;
+    }
+
+    render(<Watch />);
+    expect(seen).toBe("typed");
   });
 });
