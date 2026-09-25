@@ -581,7 +581,7 @@ Reduced-motion → static `--wg-50` block.
 | State | Treatment |
 | --- | --- |
 | Board not found | Centered card: _"That board doesn't exist yet."_ + `Create board "abc12"` (id prefilled). |
-| Connection lost | Slim `--warning-subtle` bar under the top bar: _"Reconnecting…"_. On recovery: toast _"Back online"_, bar clears. Never blocks the canvas. |
+| Connection lost | Slim `--warning-subtle` bar under the top bar: _"Reconnecting… your changes will sync when you're back, so keep this tab open."_ — unsynced work lives only in the tab, so it's never called saved. On recovery: toast _"Back online"_ (success), bar clears. Never blocks the canvas. |
 | Board expired | Centered card: _"This board has expired."_ + `Start a new board`. |
 | Board error | Centered card: _"This board hit an error."_ over _"Everything that synced before the error is saved. Reload the board to carry on."_ + `Reload board`, ghost `Back to home`. Replaces the board when it fails to render, rather than leaving a blank page. |
 | Empty My Boards | _"No boards yet. Create one to get started."_ + primary `New board`. |

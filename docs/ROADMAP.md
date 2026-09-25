@@ -94,8 +94,9 @@ the v1 scope.
 - [x] Dashed border on hovering a text box (§10.9), driven by the hover hit-test
   since elements take no pointer events — with Select and Text only, the tools
   a press on it would act on
-- [ ] "Back online" toast (§10.21); the reconnect bar's "saved locally" is only
-  true in memory until offline persistence lands
+- [x] "Back online" toast (§10.21). The reconnect bar no longer says "saved
+  locally", which was only true in memory; it says to keep the tab open until
+  offline persistence lands
 - [ ] Avatar cluster popover: who's here, and their role (§10.11)
 - [ ] My Boards tile menu — Rename, Delete with a confirm, Duplicate (needs a copy
   endpoint) — and "edited 2h ago" (§10.15)

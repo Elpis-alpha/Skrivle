@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type WebSocketRoute } from "@playwright/test";
 import { signIn } from "./helpers/auth";
 
 async function newBoard(page: import("@playwright/test").Page) {
@@ -149,4 +149,30 @@ test("the board's top bar fits a 360px phone without scrolling", async ({ page }
     .locator("header")
     .evaluate((header) => header.scrollWidth - header.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+// §10.21 — the bar while the socket is down, and a toast when it's back.
+test("losing the connection shows Reconnecting, and coming back says so", async ({
+  page,
+  context,
+}) => {
+  // Going offline doesn't close a WebSocket that's already open, so the test
+  // sits in the middle of it and closes it from there.
+  const sockets: WebSocketRoute[] = [];
+  await context.routeWebSocket(/\/socket\.io\//, (ws) => {
+    ws.connectToServer();
+    sockets.push(ws);
+  });
+
+  await newBoard(page);
+  await expect(page.getByTestId("presence-avatar")).toHaveCount(1);
+
+  await context.setOffline(true);
+  for (const ws of sockets) await ws.close();
+  await expect(page.getByText(/Reconnecting…/)).toBeVisible();
+  await expect(page.getByTestId("board-canvas")).toBeVisible();
+
+  await context.setOffline(false);
+  await expect(page.getByText("Back online")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Reconnecting…/)).toHaveCount(0);
 });
