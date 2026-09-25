@@ -183,6 +183,13 @@ Hosted under `elpis.cc`, split by tier:
   makes them unforgeable and makes re-uploads overwrite rather than accumulate.
   Thumbnails are rendered in the browser and re-uploaded after five idle seconds
   of changes, or when the page is hidden.
+- **Error reporting: the API's own log.** Every unexpected error, the API's and
+  those browsers post to `POST /api/errors`, is one `[skrivle] error {json}`
+  line (`back-end/src/errors/report.ts`). There's no third party, so the
+  privacy page's "no third-party analytics" still holds. The cost is that
+  nothing alerts anyone: the log has to be read. An error service such as
+  Sentry is the upgrade path. The Worker's own errors stay in Cloudflare's
+  Workers logs, where `observability` in `wrangler.jsonc` sends them.
 
 ## Still open
 

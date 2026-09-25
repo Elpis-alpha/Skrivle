@@ -50,6 +50,74 @@ board. Front-end only — no doc schema or wire-format changes.
 - [x] Peers' selections shown on the board
 - [x] Copy, paste, duplicate
 
+## Phase 1.6 — Review follow-ups
+
+From a review of the live board (2026-09-25), in the order they should be done:
+live bugs first, then the safety net that would have caught them, editing
+basics, the style guide's unkept promises, hardening, and finally features past
+the v1 scope.
+
+**Bugs**
+
+- [x] A text box no longer grows forever while you type in it (React #185) — the
+  editor measured it as if it had a note's padding
+- [x] Notes and text boxes reopen for typing: double-click, Enter, or the Text
+  tool on existing text (§10.7)
+- [x] An edit that lands while a snapshot is being written stays queued, rather
+  than being marked saved and lost on the next deploy
+- [x] Element hooks no longer miss a doc change that lands between an element's
+  first render and its subscription: the doc clears the snapshot caches in
+  `useElements.ts`, not the subscription
+
+**Safety net**
+
+- [x] Error boundary on `/board/:id`, in the §10.21 voice with a Reload — a render
+  error used to blank the whole page
+- [x] Error reporting, client and server: browsers post what they catch to
+  `POST /api/errors`, and it lands in the API's log beside the API's own errors,
+  one `[skrivle] error` line each
+
+**Editing basics**
+
+- [ ] Arrow keys nudge the selection (1px, Shift for 10px), one undo step per
+  burst; Cmd/Ctrl+A selects all
+- [ ] Z-order: `]` / `[` bring to front / send to back, Cmd for one step — writes
+  only `order`, which is kept separate for exactly this
+- [ ] An empty text box is removed when editing ends
+- [ ] Touch: pinch-zoom and two-finger pan (`useBoardGestures` ignores a second
+  pointer today)
+
+**Style guide, not yet kept**
+
+- [ ] Dashed border on hovering a text box (§10.9), driven by the hover hit-test
+  since elements take no pointer events
+- [ ] "Back online" toast (§10.21); the reconnect bar's "saved locally" is only
+  true in memory until offline persistence lands
+- [ ] Avatar cluster popover: who's here, and their role (§10.11)
+- [ ] My Boards tile menu — Rename, Delete with a confirm, Duplicate (needs a copy
+  endpoint) — and "edited 2h ago" (§10.15)
+
+**Hardening**
+
+- [ ] Socket limits: a per-socket token bucket on sync and awareness updates, a
+  cap on a board's encoded size, and awareness updates limited to the socket's
+  own client ids
+- [ ] Offline persistence (`y-indexeddb`), so a reload while offline keeps
+  unsynced work
+- [ ] An update log between snapshots, so a crash loses nothing rather than up
+  to 30s
+
+**Past v1 scope**
+
+- [ ] Export to PNG / SVG, reusing the thumbnail renderer at full resolution
+- [ ] Follow a collaborator's viewport (shared through awareness)
+- [ ] Resize a multi-selection as a group
+- [ ] Text inside shapes (an additive `Y.Text` on rect and ellipse)
+- [ ] Images on the canvas (a new `image` kind; Cloudinary signing exists)
+- [ ] View-only share links
+- [ ] Render only the elements near the viewport — after measuring a
+  1,000-element board, and with a margin, since ink overhangs its box
+
 ## Phase 2 — Native app
 
 Not started; no timeline. v1 (Phase 0 + 1) is complete and live.
@@ -59,5 +127,5 @@ Not started; no timeline. v1 (Phase 0 + 1) is complete and live.
 
 ## Deferred / out of scope for v1
 
-Comments, chat, reactions, templates, export (PDF/PNG), permission tiers beyond
-owner/editor.
+Comments, chat, reactions, templates. Export and view-only links, deferred
+until now, are proposed in Phase 1.6.

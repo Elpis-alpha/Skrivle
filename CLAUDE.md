@@ -80,8 +80,9 @@ field and are outlined in their cursor hue. Copy, paste and duplicate go through
 every element field by field. Pen ink is a filled, tapered outline
 (perfect-freehand) at constant weight — speed-simulated pressure was tried and
 dropped, because `simplify()` on release changed a finished stroke's weight by
-up to half. None of it changed the doc schema. What's left for the roadmap is
-Phase 2, the native app — see [docs/ROADMAP.md](docs/ROADMAP.md).
+up to half. None of it changed the doc schema. Next is Phase 1.6, the follow-ups
+from a review of the live board, listed in the order to do them; then Phase 2,
+the native app — see [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Five things worth knowing before touching this seam:
 
@@ -89,7 +90,11 @@ Five things worth knowing before touching this seam:
   or `Y.Array`,** and a *deleted* type's observer never fires at all. So an
   element hook subscribes to its own map **and** to the parent `elements` map
   (the only thing that reports its own deletion), while text and pen samples get
-  their own subscriptions. `src/lib/realtime/useElements.ts` has the detail.
+  their own subscriptions. The snapshot caches behind those hooks are cleared
+  by the doc (`beforeObserverCalls`), not by the subscriptions: a child's mount
+  effect runs before its parent subscribes, so a write it makes would otherwise
+  leave the parent holding a stale snapshot. `src/lib/realtime/useElements.ts`
+  has the detail.
 - **The camera never goes through React state.** `CameraLayer` writes the
   transform and `--cam-scale` from a rAF, so a wheel tick doesn't reconcile
   every element — and, more importantly, remote cursors share that one transform
@@ -108,12 +113,17 @@ Five things worth knowing before touching this seam:
 - **React registers `wheel` as a passive listener,** so `preventDefault()` in an
   `onWheel` prop does nothing. Zoom is a native listener with `passive: false`.
 
-Two more, about the tiers:
+Three more, about the tiers:
 
 - The API types in `front-end/src/lib/api/types.ts` mirror
   `back-end/openapi.yaml` **by hand** (no codegen, no cross-folder imports), as
   do `src/lib/realtime/events.ts` and `src/lib/presence-colors.ts`. Change one
   side, change the other.
+- Unexpected errors from both tiers land in the back-end's log, one
+  `[skrivle] error {json}` line each: the API's through
+  `back-end/src/errors/report.ts`, and the browser's through
+  `front-end/src/lib/report-error.ts` → `POST /api/errors`. A new catch-all
+  should report through those rather than calling `console.error`.
 - Board data is fetched client-side on purpose. The session cookie is host-only
   on the API origin, so a Worker rendering `/board/:id` can't see it. In local
   dev it *would* be readable — same host, different port — which is exactly why

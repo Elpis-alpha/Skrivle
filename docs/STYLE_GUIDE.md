@@ -467,7 +467,8 @@ Shapes and lines keep a uniform stroke.
   min 160×160, auto-grows downward.
 - Border: fill hue −8% lightness, 1px. `--elev-1` only while dragging.
 - Selected: 1px `--accent` bounding box with 6px `--accent` square handles at
-  corners/edges. Double-click enters text edit; caret is `--accent`.
+  corners/edges. Double-click — or Enter, when it's the only thing selected —
+  enters text edit, after the text already there; caret is `--accent`.
 
 ### 10.8 Shapes (rectangle / circle / line / arrow)
 
@@ -480,7 +481,9 @@ Shapes and lines keep a uniform stroke.
 
 No border or background until hovered (1px dashed `--border`) or editing (1px
 solid `--accent`). Placeholder `--ink-muted` "Type something". `text-base` to
-`text-2xl` via the size control; color from the stroke picker.
+`text-2xl` via the size control; color from the stroke picker. Grows downward as
+it fills, like a note. Reopened the note's way (§10.7), and also by pressing on
+it with the Text tool, which edits it rather than placing a new box on top.
 
 ### 10.10 Remote cursor + name tag
 
@@ -571,6 +574,7 @@ Reduced-motion → static `--wg-50` block.
 | Board not found | Centered card: _"That board doesn't exist yet."_ + `Create board "abc12"` (id prefilled). |
 | Connection lost | Slim `--warning-subtle` bar under the top bar: _"Reconnecting…"_. On recovery: toast _"Back online"_, bar clears. Never blocks the canvas. |
 | Board expired | Centered card: _"This board has expired."_ + `Start a new board`. |
+| Board error | Centered card: _"This board hit an error."_ over _"Everything that synced before the error is saved. Reload the board to carry on."_ + `Reload board`, ghost `Back to home`. Replaces the board when it fails to render, rather than leaving a blank page. |
 | Empty My Boards | _"No boards yet. Create one to get started."_ + primary `New board`. |
 | Empty board | Centred on the canvas, no card: _"This board is empty."_ (`text-md` 500) over _"Press N for a note or P to draw — or share the link and draw together."_ (`text-sm` `--ink-secondary`, keys as small bordered chips; coarse pointers get _"Pick a tool below to start"_ instead), then a secondary `Copy link`. Only once the doc has loaded. Presses pass straight through the text to the canvas; gone the moment anything lands, from anyone. |
 | Save/permission error | Toast, `--danger` text, names the cause and the retry. |
