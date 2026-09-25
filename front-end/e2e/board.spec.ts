@@ -158,14 +158,25 @@ test("losing the connection shows Reconnecting, and coming back says so", async 
 }) => {
   // Going offline doesn't close a WebSocket that's already open, so the test
   // sits in the middle of it and closes it from there.
+  //
+  // Socket.IO starts on long-polling and moves to the WebSocket once it has
+  // probed it; cut the WebSocket before then and the client simply stays on
+  // polling. Engine.IO's "5" packet is the client committing to the upgrade.
   const sockets: WebSocketRoute[] = [];
+  let upgraded = false;
   await context.routeWebSocket(/\/socket\.io\//, (ws) => {
-    ws.connectToServer();
+    const server = ws.connectToServer();
+    ws.onMessage((message) => {
+      if (message === "5") upgraded = true;
+      server.send(message);
+    });
+    server.onMessage((message) => ws.send(message));
     sockets.push(ws);
   });
 
   await newBoard(page);
   await expect(page.getByTestId("presence-avatar")).toHaveCount(1);
+  await expect.poll(() => upgraded).toBe(true);
 
   await context.setOffline(true);
   for (const ws of sockets) await ws.close();
