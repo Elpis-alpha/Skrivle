@@ -442,3 +442,71 @@ test("copy, paste and duplicate make new elements, each one undo", async ({ page
   await page.keyboard.press("ControlOrMeta+z");
   await expect(elements(page)).toHaveCount(1);
 });
+
+test("arrow keys nudge the selection, and a run of presses is one undo", async ({ page }) => {
+  await newBoard(page);
+  await pickTool(page, "r");
+  await dragOut(page, [200, 200], [300, 260]);
+  const rect = page.locator('[data-kind="rect"]');
+  await expect(rect).toHaveCSS("left", "200px");
+
+  for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect(rect).toHaveCSS("left", "203px");
+  await expect(rect).toHaveCSS("top", "210px");
+
+  // One Cmd+Z takes back the whole run, and only the run: the rectangle stays.
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(rect).toHaveCSS("left", "200px");
+  await expect(rect).toHaveCSS("top", "200px");
+  await expect(elements(page)).toHaveCount(1);
+});
+
+test("Ctrl/Cmd+A selects everything on the board", async ({ page }) => {
+  await newBoard(page);
+  await pickTool(page, "r");
+  await dragOut(page, [150, 150], [250, 230]);
+  await pickTool(page, "o");
+  await dragOut(page, [400, 150], [500, 230]);
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("board-selection")).toHaveCount(0);
+
+  await page.keyboard.press("ControlOrMeta+a");
+  await expect(page.getByTestId("board-selection")).toHaveCount(2);
+});
+
+test("a style change is its own undo step", async ({ page }) => {
+  await newBoard(page);
+  await pickTool(page, "r");
+  await dragOut(page, [200, 200], [300, 260]);
+  const outline = page.locator('[data-kind="rect"] rect');
+  await expect(outline).toHaveAttribute("stroke-width", "2");
+
+  await page.getByRole("button", { name: "Colour and stroke" }).click();
+  await page.getByRole("button", { name: "8 pixel stroke" }).click();
+  await expect(outline).toHaveAttribute("stroke-width", "8");
+
+  await page.getByTestId("board-canvas").focus();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(outline).toHaveAttribute("stroke-width", "2");
+  await expect(elements(page)).toHaveCount(1);
+});
+
+test("typing into a note reopened with Enter is its own undo step", async ({ page }) => {
+  await newBoard(page);
+  await pickTool(page, "n");
+  await page.mouse.click(...(await canvasAt(page, 300, 300)));
+  const note = page.locator('[data-kind="note"]');
+  await page.keyboard.type("hello");
+  await page.keyboard.press("Escape");
+
+  await page.keyboard.press("Enter");
+  await page.keyboard.type(" again");
+  await page.keyboard.press("Escape");
+  await expect(note).toContainText("hello again");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(note).toHaveCount(1);
+  await expect(note).toContainText("hello");
+  await expect(note).not.toContainText("again");
+});

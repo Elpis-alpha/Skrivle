@@ -31,12 +31,15 @@ import { centredOn, copyPayload, nudged, parsePayload } from "@/lib/board/clipbo
 import {
   holdsText,
   insertElements,
+  moveBy,
+  orderedIds,
   readElement,
   removeElements,
   updateElement,
   type ElementInit,
 } from "@/lib/board/elements";
 import type { Point } from "@/lib/board/geometry";
+import { continuesBurst, nudgeFor, type Nudge } from "@/lib/board/nudge";
 import { isChrome, isTypingTarget, useBoardGestures } from "@/lib/board/useBoardGestures";
 import { createPreviewStore } from "@/lib/board/preview";
 import { useBoardTools } from "@/lib/board/useBoardTools";
@@ -117,6 +120,19 @@ export function BoardSurface({
     avatarUrl: user?.avatarUrl ?? null,
   });
 
+  const { undo, redo, stopCapturing } = useUndo(doc);
+
+  // The last arrow press, while a run of them is still one undo step.
+  const lastNudge = useRef<Nudge | null>(null);
+
+  // Everything that writes to the doc closes the open undo entry first, so each
+  // is its own Cmd+Z — and ends a run of nudges, so the next press starts a
+  // new one rather than joining whatever came in between.
+  const closeUndo = useCallback(() => {
+    lastNudge.current = null;
+    stopCapturing();
+  }, [stopCapturing]);
+
   // A style change does two things: it sets what the next element will look
   // like, and it repaints whatever is selected right now. Only the fields the
   // change actually touched, and only the ones that mean anything to each kind
@@ -126,6 +142,7 @@ export function BoardSurface({
       dispatch({ type: "style", patch });
       if (!doc || tools.selection.length === 0) return;
 
+      closeUndo();
       const resolved = { ...tools.style, ...patch };
       for (const id of tools.selection) {
         const map = elements(doc).get(id);
@@ -134,7 +151,7 @@ export function BoardSurface({
         if (Object.keys(fields).length > 0) updateElement(doc, id, fields);
       }
     },
-    [doc, tools.selection, tools.style],
+    [doc, tools.selection, tools.style, closeUndo],
   );
 
   // Peers see what you have selected (PeerSelectionLayer). Republished when
@@ -144,7 +161,6 @@ export function BoardSurface({
     setSelection(tools.selection);
   }, [tools.selection, doc, setSelection]);
 
-  const { undo, redo, stopCapturing } = useUndo(doc);
   useThumbnail(doc, board.id);
 
   const { begin, draggingIds } = useBoardTools({
@@ -154,7 +170,7 @@ export function BoardSurface({
     store: viewport,
     state: tools,
     dispatch,
-    onGestureStart: stopCapturing,
+    onGestureStart: closeUndo,
     preview,
   });
 
@@ -184,12 +200,12 @@ export function BoardSurface({
   const insertAndSelect = useCallback(
     (inits: readonly ElementInit[]) => {
       if (!doc || inits.length === 0) return;
-      stopCapturing();
+      closeUndo();
       const ids = insertElements(doc, inits);
       dispatch({ type: "tool", tool: "select" });
       dispatch({ type: "select", ids });
     },
-    [doc, stopCapturing],
+    [doc, closeUndo],
   );
 
   // Copy and paste ride the browser's own clipboard events rather than the
@@ -248,6 +264,15 @@ export function BoardSurface({
           camera.zoomOut();
           return;
         }
+        // Everything on the board — and not the page's text.
+        if (key === "a") {
+          event.preventDefault();
+          if (doc) {
+            dispatch({ type: "tool", tool: "select" });
+            dispatch({ type: "select", ids: orderedIds(doc) });
+          }
+          return;
+        }
         // Duplicate — and not the browser's "bookmark this page".
         if (key === "d") {
           event.preventDefault();
@@ -289,14 +314,28 @@ export function BoardSurface({
         return;
       }
 
+      // Arrow keys nudge the selection. A run of presses is one undo step.
+      const step = nudgeFor(event.key, event.shiftKey);
+      if (step) {
+        if (!doc || tools.selection.length === 0) return;
+        event.preventDefault();
+        const press: Nudge = { at: event.timeStamp, ids: tools.selection };
+        if (!continuesBurst(lastNudge.current, press)) closeUndo();
+        lastNudge.current = press;
+        moveBy(doc, tools.selection, step.x, step.y);
+        return;
+      }
+
       // The keyboard's way to the double-click: open the one selected note or
       // text box for typing. preventDefault, or the Enter lands in it as a
-      // newline once it has focus.
+      // newline once it has focus. The typing is its own undo step, as it is
+      // after a double-click, which closes the entry as a gesture.
       if (event.key === "Enter" && doc && tools.selection.length === 1) {
         const id = tools.selection[0];
         const map = elements(doc).get(id);
         if (map && holdsText(readElement(id, map).kind)) {
           event.preventDefault();
+          closeUndo();
           dispatch({ type: "edit", id });
         }
         return;
@@ -305,8 +344,7 @@ export function BoardSurface({
       if (event.key === "Delete" || event.key === "Backspace") {
         if (!doc || tools.selection.length === 0) return;
         event.preventDefault();
-        // Its own undo entry, not merged with whatever came before it.
-        stopCapturing();
+        closeUndo();
         removeElements(doc, tools.selection);
         dispatch({ type: "gone", ids: tools.selection });
         return;
@@ -318,7 +356,7 @@ export function BoardSurface({
         dispatch({ type: "tool", tool });
       }
     },
-    [doc, tools.selection, undo, redo, stopCapturing, camera, insertAndSelect],
+    [doc, tools.selection, undo, redo, closeUndo, camera, insertAndSelect],
   );
 
   // A board that vanished while we were looking at it. The REST fetch already
