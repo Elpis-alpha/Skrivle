@@ -9,8 +9,9 @@
 // the newest blob is self-sufficient; keeping older ones would buy recovery
 // from a corrupt write at the cost of an ever-growing table and an index scan
 // on every rehydrate.
+import * as Y from "yjs";
 import { saveDocState } from "./board-store.js";
-import { clearDirty, dirtyBoardIds, peekDoc } from "./doc-manager.js";
+import { clearDirty, dirtyBoardIds, markDirty, peekDoc } from "./doc-manager.js";
 
 export const SNAPSHOT_INTERVAL_MS = 30_000;
 
@@ -57,13 +58,22 @@ export async function flushDirty(): Promise<void> {
 /**
  * Persist one board's current doc state.
  *
- * The dirty flag is cleared only after the write lands, so a failed write
- * leaves the board queued for the next sweep rather than silently dropping it.
+ * The dirty flag is cleared in the same tick the state is encoded, not after
+ * the write lands. Clearing it afterwards also cleared it for any edit that
+ * arrived during the write — an edit the blob doesn't contain — and shutdown
+ * only flushes boards still flagged, so that edit was lost on every deploy. A
+ * failed write flags the board again, leaving it queued for the next sweep.
  */
 export async function persistSnapshot(boardId: string): Promise<void> {
   const doc = peekDoc(boardId);
   if (!doc) return;
 
-  await saveDocState(boardId, doc);
+  const state = Y.encodeStateAsUpdate(doc);
   clearDirty(boardId);
+  try {
+    await saveDocState(boardId, state);
+  } catch (err) {
+    markDirty(boardId);
+    throw err;
+  }
 }

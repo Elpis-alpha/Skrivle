@@ -94,7 +94,10 @@ export function markDirty(boardId: string): void {
   if (entry) entry.dirty = true;
 }
 
-/** Clear the dirty flag — called only once a write has actually landed. */
+/**
+ * Clear the dirty flag — called as a snapshot is encoded, so an edit arriving
+ * during the write flags the board again.
+ */
 export function clearDirty(boardId: string): void {
   const entry = docs.get(boardId);
   if (entry) entry.dirty = false;
