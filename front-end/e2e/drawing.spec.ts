@@ -510,3 +510,33 @@ test("typing into a note reopened with Enter is its own undo step", async ({ pag
   await expect(note).toContainText("hello");
   await expect(note).not.toContainText("again");
 });
+
+test("brackets change what's on top, and Cmd steps one at a time", async ({ page }) => {
+  await newBoard(page);
+  await pickTool(page, "r");
+  await dragOut(page, [200, 200], [320, 300]);
+  await pickTool(page, "o");
+  await dragOut(page, [240, 240], [360, 340]);
+  await pickTool(page, "l");
+  await dragOut(page, [600, 200], [700, 200]);
+  expect(await kinds(page)).toEqual(["rect", "ellipse", "line"]);
+
+  // Grab the rectangle by its top edge, clear of the circle.
+  await pickTool(page, "v");
+  await page.mouse.click(...(await canvasAt(page, 230, 200)));
+  await expect(page.getByTestId("board-selection")).toHaveCount(1);
+
+  await page.keyboard.press("]");
+  await expect.poll(() => kinds(page)).toEqual(["ellipse", "line", "rect"]);
+  await page.keyboard.press("[");
+  await expect.poll(() => kinds(page)).toEqual(["rect", "ellipse", "line"]);
+  await page.keyboard.press("ControlOrMeta+]");
+  await expect.poll(() => kinds(page)).toEqual(["ellipse", "rect", "line"]);
+  await page.keyboard.press("ControlOrMeta+[");
+  await expect.poll(() => kinds(page)).toEqual(["rect", "ellipse", "line"]);
+
+  // Each one is its own undo step.
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(() => kinds(page)).toEqual(["ellipse", "rect", "line"]);
+  await expect(elements(page)).toHaveCount(3);
+});

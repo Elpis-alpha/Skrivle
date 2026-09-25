@@ -35,8 +35,10 @@ import {
   orderedIds,
   readElement,
   removeElements,
+  restack,
   updateElement,
   type ElementInit,
+  type Restack,
 } from "@/lib/board/elements";
 import type { Point } from "@/lib/board/geometry";
 import { continuesBurst, nudgeFor, type Nudge } from "@/lib/board/nudge";
@@ -244,6 +246,16 @@ export function BoardSurface({
     [insertAndSelect],
   );
 
+  // Brackets move the selection up or down the paint order. Its own undo step.
+  const onRestack = useCallback(
+    (to: Restack) => {
+      if (!doc || tools.selection.length === 0) return;
+      closeUndo();
+      restack(doc, tools.selection, to);
+    },
+    [doc, tools.selection, closeUndo],
+  );
+
   // Shortcuts are bound to the canvas rather than the window, because the board
   // title and every note's textarea are also on this page — a window listener
   // would turn typing "n" into a new sticky note. The textarea additionally
@@ -262,6 +274,13 @@ export function BoardSurface({
         if (key === "-") {
           event.preventDefault();
           camera.zoomOut();
+          return;
+        }
+        // One step up or down — and not the browser's back and forward, which
+        // Cmd+[ and Cmd+] are on a Mac.
+        if (key === "]" || key === "[") {
+          event.preventDefault();
+          onRestack(key === "]" ? "forward" : "backward");
           return;
         }
         // Everything on the board — and not the page's text.
@@ -314,6 +333,12 @@ export function BoardSurface({
         return;
       }
 
+      if (event.key === "]" || event.key === "[") {
+        event.preventDefault();
+        onRestack(event.key === "]" ? "front" : "back");
+        return;
+      }
+
       // Arrow keys nudge the selection. A run of presses is one undo step.
       const step = nudgeFor(event.key, event.shiftKey);
       if (step) {
@@ -356,7 +381,7 @@ export function BoardSurface({
         dispatch({ type: "tool", tool });
       }
     },
-    [doc, tools.selection, undo, redo, closeUndo, camera, insertAndSelect],
+    [doc, tools.selection, undo, redo, closeUndo, camera, insertAndSelect, onRestack],
   );
 
   // A board that vanished while we were looking at it. The REST fetch already

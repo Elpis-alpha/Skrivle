@@ -281,6 +281,71 @@ export function removeElements(doc: Y.Doc, ids: readonly string[]): void {
   }, LOCAL);
 }
 
+/** Where a restack sends the selection in the paint order. */
+export type Restack = "front" | "back" | "forward" | "backward";
+
+/**
+ * Move elements up or down the paint order: all the way, or one step past the
+ * element next to them. A run of selected elements moves as one.
+ *
+ * Writes only `order` — which is kept apart from the elements for exactly
+ * this — and only the entries that have to move. Steps count what is painted,
+ * so an id left in the order without an element is never what gets stepped
+ * past.
+ */
+export function restack(doc: Y.Doc, ids: readonly string[], to: Restack): void {
+  const painted = orderedIds(doc);
+  const chosen = new Set(ids);
+  const { next, moved } = restacked(painted, chosen, to);
+  if (next.every((id, i) => id === painted[i])) return;
+
+  doc.transact(() => {
+    const list = order(doc);
+    // Bottom to top, so whatever each one is placed after is already final.
+    next.forEach((id, i) => {
+      if (!moved.has(id)) return;
+      for (let j = list.length - 1; j >= 0; j--) {
+        if (list.get(j) === id) list.delete(j, 1);
+      }
+      const at = i === 0 ? 0 : list.toArray().indexOf(next[i - 1]) + 1;
+      list.insert(at, [id]);
+    });
+  }, LOCAL);
+}
+
+/** The new paint order, and the fewest ids that have to move to get there. */
+function restacked(
+  painted: readonly string[],
+  chosen: ReadonlySet<string>,
+  to: Restack,
+): { next: string[]; moved: ReadonlySet<string> } {
+  if (to === "front" || to === "back") {
+    const kept = painted.filter((id) => !chosen.has(id));
+    const lifted = painted.filter((id) => chosen.has(id));
+    return { next: to === "front" ? [...kept, ...lifted] : [...lifted, ...kept], moved: chosen };
+  }
+
+  // One step: each selected element swaps with the unselected one beside it,
+  // walking from the far end so a run of selected elements carries through as
+  // a block. What actually moves is the element each run stepped past.
+  const next = [...painted];
+  const moved = new Set<string>();
+  const swap = (i: number, j: number) => {
+    moved.add(next[j]);
+    [next[i], next[j]] = [next[j], next[i]];
+  };
+  if (to === "forward") {
+    for (let i = next.length - 2; i >= 0; i--) {
+      if (chosen.has(next[i]) && !chosen.has(next[i + 1])) swap(i, i + 1);
+    }
+  } else {
+    for (let i = 1; i < next.length; i++) {
+      if (chosen.has(next[i]) && !chosen.has(next[i - 1])) swap(i, i - 1);
+    }
+  }
+  return { next, moved };
+}
+
 /**
  * Add pen samples to a stroke and grow its bounding box.
  *

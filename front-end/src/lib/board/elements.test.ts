@@ -18,6 +18,7 @@ import {
   repairOrder,
   replacePoints,
   resizeElement,
+  restack,
   textOf,
   updateElement,
 } from "./elements";
@@ -225,6 +226,80 @@ describe("removeElements", () => {
   it("is one update", () => {
     const ids = [createElement(doc, rect), createElement(doc, rect)];
     expect(recordUpdates(() => removeElements(doc, ids))).toEqual([LOCAL]);
+  });
+});
+
+describe("restack", () => {
+  /** Five elements, bottom to top. */
+  const five = () => Array.from({ length: 5 }, () => createElement(doc, rect));
+
+  it("brings the selection to the front, keeping its own order", () => {
+    const [a, b, c, d, e] = five();
+    restack(doc, [b, a], "front");
+    expect(orderedIds(doc)).toEqual([c, d, e, a, b]);
+  });
+
+  it("sends the selection to the back, keeping its own order", () => {
+    const [a, b, c, d, e] = five();
+    restack(doc, [e, c], "back");
+    expect(orderedIds(doc)).toEqual([c, e, a, b, d]);
+  });
+
+  it("brings each selected element forward past the one above it", () => {
+    const [a, b, c, d, e] = five();
+    restack(doc, [a, c], "forward");
+    expect(orderedIds(doc)).toEqual([b, a, d, c, e]);
+  });
+
+  it("sends each selected element backward past the one below it", () => {
+    const [a, b, c, d, e] = five();
+    restack(doc, [c, e], "backward");
+    expect(orderedIds(doc)).toEqual([a, c, b, e, d]);
+  });
+
+  it("steps a run of selected elements as one", () => {
+    const [a, b, c, d, e] = five();
+    restack(doc, [b, c], "forward");
+    expect(orderedIds(doc)).toEqual([a, d, b, c, e]);
+  });
+
+  it("leaves an element already at the front there, and still steps the rest", () => {
+    const [a, b, c, d, e] = five();
+    restack(doc, [e, b], "forward");
+    expect(orderedIds(doc)).toEqual([a, c, b, d, e]);
+  });
+
+  // The reason `order` is a root type of its own.
+  it("writes only the paint order, as one local update", () => {
+    const [a, b] = five();
+    let touched = 0;
+    elements(doc).observeDeep(() => touched++);
+    expect(recordUpdates(() => restack(doc, [a, b], "front"))).toEqual([LOCAL]);
+    expect(touched).toBe(0);
+  });
+
+  it("writes nothing when the selection is already there", () => {
+    const [a, , , d, e] = five();
+    expect(recordUpdates(() => restack(doc, [d, e], "front"))).toEqual([]);
+    expect(recordUpdates(() => restack(doc, [e], "forward"))).toEqual([]);
+    expect(recordUpdates(() => restack(doc, [a], "backward"))).toEqual([]);
+  });
+
+  // Stepping past an id with no element would look like nothing happened.
+  it("steps past what is painted, not past a ghost in the order", () => {
+    const a = createElement(doc, rect);
+    const b = createElement(doc, rect);
+    doc.transact(() => order(doc).insert(1, ["ghost"]));
+    restack(doc, [a], "forward");
+    expect(orderedIds(doc)).toEqual([b, a]);
+  });
+
+  it("drops a duplicated entry for what it moves", () => {
+    const a = createElement(doc, rect);
+    const b = createElement(doc, rect);
+    doc.transact(() => order(doc).push([a]));
+    restack(doc, [a], "front");
+    expect(order(doc).toArray()).toEqual([b, a]);
   });
 });
 
