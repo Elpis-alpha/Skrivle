@@ -103,6 +103,29 @@ export function panBy(viewport: Viewport, dx: number, dy: number): Viewport {
   return clampViewport({ ...viewport, x: viewport.x + dx, y: viewport.y + dy });
 }
 
+/** Two fingers, in canvas-relative screen pixels. */
+export type FingerPair = readonly [Point, Point];
+
+/**
+ * Follow two fingers from one position to the next: scale by how far they
+ * spread, and pan by how far the point between them moves. Whatever was
+ * between them stays between them, so the board feels held rather than
+ * steered.
+ */
+export function pinch(viewport: Viewport, from: FingerPair, to: FingerPair): Viewport {
+  const spread = (pair: FingerPair) => Math.hypot(pair[1].x - pair[0].x, pair[1].y - pair[0].y);
+  const middle = (pair: FingerPair): Point => ({
+    x: (pair[0].x + pair[1].x) / 2,
+    y: (pair[0].y + pair[1].y) / 2,
+  });
+
+  const was = middle(from);
+  const now = middle(to);
+  const apart = spread(from);
+  const zoomed = apart > 0 ? zoomAt(viewport, spread(to) / apart, was) : viewport;
+  return panBy(zoomed, now.x - was.x, now.y - was.y);
+}
+
 /** A host element's size, in screen pixels. */
 export type Size = { w: number; h: number };
 

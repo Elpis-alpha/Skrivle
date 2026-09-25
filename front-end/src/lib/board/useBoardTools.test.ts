@@ -38,6 +38,16 @@ const only = () => {
 };
 
 describe("beginDrawOut", () => {
+  // A drag cancelled — a second finger turning it into a pinch, or the browser
+  // taking the pointer — didn't happen.
+  it("takes back the element it started when the drag is cancelled", () => {
+    const handlers = beginDrawOut(doc, { x: 10, y: 10 }, "rect", DEFAULT_STYLE, dispatch, preview);
+    handlers.move({ x: 80, y: 60 }, []);
+    vi.advanceTimersByTime(PUBLISH_MS);
+    handlers.cancel?.();
+    expect(orderedIds(doc)).toEqual([]);
+  });
+
   it("publishes where a line's end is now, not where it was when the timer armed", () => {
     const handlers = beginDrawOut(doc, { x: 0, y: 0 }, "line", DEFAULT_STYLE, dispatch, preview);
 
@@ -123,6 +133,18 @@ describe("beginResize", () => {
 });
 
 describe("beginMove", () => {
+  it("puts the selection back where it started when the drag is cancelled", () => {
+    const id = createElement(doc, { kind: "rect", x: 0, y: 0, w: 10, h: 10 });
+    const host = document.createElement("div");
+    const handlers = beginMove(doc, [id], { x: 0, y: 0 }, host, () => {});
+    handlers.move({ x: 30, y: 20 }, []);
+    vi.advanceTimersByTime(PUBLISH_MS);
+    expect(readElement(id, elements(doc).get(id)!)).toMatchObject({ x: 30, y: 20 });
+
+    handlers.cancel?.();
+    expect(readElement(id, elements(doc).get(id)!)).toMatchObject({ x: 0, y: 0 });
+  });
+
   it("carries the selection outline along with the element every frame", () => {
     const host = document.createElement("div");
     host.innerHTML =
@@ -176,6 +198,17 @@ describe("beginStroke", () => {
     vi.advanceTimersToNextFrame();
 
     expect(ink.getAttribute("d")).toBe(strokeOutline([0, 0, 5, 2, 10, 5], 4));
+  });
+});
+
+describe("beginStroke, cancelled", () => {
+  it("takes back the stroke", () => {
+    const host = document.createElement("div");
+    const handlers = beginStroke(doc, { x: 0, y: 0 }, DEFAULT_STYLE, dispatch, host);
+    handlers.move({ x: 5, y: 2 }, [{ x: 5, y: 2 }]);
+    vi.advanceTimersByTime(PUBLISH_MS);
+    handlers.cancel?.();
+    expect(orderedIds(doc)).toEqual([]);
   });
 });
 

@@ -2,16 +2,19 @@
 
 // Every pointer, wheel and key event on the canvas, in one place.
 //
-// One pointerdown path, because there is only one pointer: it either pans the
-// camera or it goes to the active tool, and having two hooks both try to claim
-// it would be a race. The tool half is supplied by the caller as `begin`, so
-// this file never has to know what a sticky note is.
+// One pointerdown path: a press either pans the camera or goes to the active
+// tool, and having two hooks both try to claim it would be a race. The tool
+// half is supplied by the caller as `begin`, so this file never has to know
+// what a sticky note is. The one exception to one-pointer-at-a-time is a
+// second finger, which turns whatever the first started into a pinch.
 
 import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
 import {
   panBy,
+  pinch,
   screenToBoard,
   zoomAt,
+  type FingerPair,
   type Point,
   type ViewportStore,
 } from "./viewport";
@@ -26,7 +29,10 @@ export type DragHandlers = {
    */
   move: (point: Point, samples: readonly Point[]) => void;
   end: (point: Point, event: PointerEvent) => void;
-  /** The browser took the pointer away, or the gesture was abandoned. */
+  /**
+   * The gesture didn't happen after all: a second finger made it a pinch, or
+   * the browser took the pointer away. Whatever it did is taken back.
+   */
   cancel?: () => void;
 };
 
@@ -37,7 +43,8 @@ export type BeginDrag = (
 
 type Gesture =
   | { kind: "pan"; pointerId: number; lastX: number; lastY: number }
-  | { kind: "tool"; pointerId: number; handlers: DragHandlers };
+  | { kind: "tool"; pointerId: number; handlers: DragHandlers }
+  | { kind: "pinch"; fingers: readonly [number, number]; last: FingerPair };
 
 /** A line of wheel delta, for mice that report in lines rather than pixels. */
 const LINE_HEIGHT = 16;
@@ -168,6 +175,38 @@ export function useBoardGestures({
     };
 
     // --- Pointer -----------------------------------------------------------
+
+    // Every finger on the canvas, in canvas pixels. Forgotten on release
+    // wherever that lands (see forgetFinger), so a finger lifted off the
+    // canvas can't count towards the next pinch.
+    const fingers = new Map<number, Point>();
+
+    // Two fingers down: a pinch, whatever the first one had started — a stroke
+    // or a shape begun by a finger that was on its way to a pinch is taken
+    // back. A pen or mouse drag already under way carries on: fingers arriving
+    // then are a palm resting on the screen.
+    const startPinch = () => {
+      const current = gestureRef.current;
+      if (current?.kind === "pinch") return;
+      if (current && !fingers.has(current.pointerId)) return;
+      if (current?.kind === "tool") current.handlers.cancel?.();
+
+      const [a, b] = [...fingers.keys()];
+      gestureRef.current = {
+        kind: "pinch",
+        fingers: [a, b],
+        last: [fingers.get(a)!, fingers.get(b)!],
+      };
+      for (const id of [a, b]) {
+        if (!host.hasPointerCapture(id)) host.setPointerCapture(id);
+      }
+      host.focus({ preventScroll: true });
+    };
+
+    /** Whether this pointer is one of the pinch's two fingers. */
+    const pinching = (gesture: Gesture | null, pointerId: number) =>
+      gesture?.kind === "pinch" && gesture.fingers.includes(pointerId);
+
     const finish = (gesture: Gesture, event: PointerEvent, cancelled: boolean) => {
       gestureRef.current = null;
       if (host.hasPointerCapture(event.pointerId)) {
@@ -179,13 +218,21 @@ export function useBoardGestures({
     };
 
     const onPointerDown = (event: PointerEvent) => {
-      if (gestureRef.current) return;
       // Presses on the toolbar, a popover, or an open text editor belong to
       // them, not to the board.
       if (isChrome(event.target) || isTypingTarget(event.target)) return;
       // Right-click is left alone: there is no canvas context menu, so let the
       // browser's own appear rather than swallowing it.
       if (event.button === 2) return;
+
+      if (event.pointerType === "touch") {
+        fingers.set(event.pointerId, toCanvas(event));
+        if (fingers.size >= 2) {
+          startPinch();
+          return;
+        }
+      }
+      if (gestureRef.current) return;
 
       const wantsPan = event.button === 1 || spaceRef.current || isPanOnly();
 
@@ -209,9 +256,21 @@ export function useBoardGestures({
     };
 
     const onPointerMove = (event: PointerEvent) => {
-      reportHover(toBoard(event));
-
+      if (fingers.has(event.pointerId)) fingers.set(event.pointerId, toCanvas(event));
       const gesture = gestureRef.current;
+
+      // Not reported as hover: peers would see the cursor flick between the
+      // two fingers.
+      if (gesture?.kind === "pinch") {
+        if (!pinching(gesture, event.pointerId)) return;
+        const [a, b] = gesture.fingers;
+        const next: FingerPair = [fingers.get(a)!, fingers.get(b)!];
+        store.set((current) => pinch(current, gesture.last, next));
+        gesture.last = next;
+        return;
+      }
+
+      reportHover(toBoard(event));
       if (!gesture || gesture.pointerId !== event.pointerId) return;
 
       if (gesture.kind === "pan") {
@@ -229,11 +288,21 @@ export function useBoardGestures({
       gesture.handlers.move(samples[samples.length - 1], samples);
     };
 
+    // Lifting either finger ends a pinch. The one left down does nothing until
+    // it lifts too: turning it into a drag would draw wherever it happened to
+    // be resting.
+    const endPinch = (event: PointerEvent) => {
+      if (pinching(gestureRef.current, event.pointerId)) gestureRef.current = null;
+    };
+
     const onPointerUp = (event: PointerEvent) => {
       const gesture = gestureRef.current;
+      if (gesture?.kind === "pinch") return endPinch(event);
       if (!gesture || gesture.pointerId !== event.pointerId) return;
       finish(gesture, event, false);
     };
+
+    const forgetFinger = (event: PointerEvent) => fingers.delete(event.pointerId);
 
     // Suppressed while the pointer is captured, which is what we want: a drag
     // that strays outside the canvas should not retract your cursor for peers.
@@ -241,6 +310,7 @@ export function useBoardGestures({
 
     const onPointerCancel = (event: PointerEvent) => {
       const gesture = gestureRef.current;
+      if (gesture?.kind === "pinch") return endPinch(event);
       if (!gesture || gesture.pointerId !== event.pointerId) return;
       finish(gesture, event, true);
     };
@@ -249,6 +319,7 @@ export function useBoardGestures({
     // the tab losing focus. Without this the board stays stuck mid-drag.
     const onLostCapture = (event: PointerEvent) => {
       const gesture = gestureRef.current;
+      if (gesture?.kind === "pinch") return endPinch(event);
       if (!gesture || gesture.pointerId !== event.pointerId) return;
       gestureRef.current = null;
       if (gesture.kind === "tool") gesture.handlers.cancel?.();
@@ -283,6 +354,8 @@ export function useBoardGestures({
     host.addEventListener("pointerleave", onPointerLeave);
     host.addEventListener("pointercancel", onPointerCancel);
     host.addEventListener("lostpointercapture", onLostCapture);
+    window.addEventListener("pointerup", forgetFinger);
+    window.addEventListener("pointercancel", forgetFinger);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("blur", onBlur);
@@ -298,6 +371,8 @@ export function useBoardGestures({
       host.removeEventListener("pointerleave", onPointerLeave);
       host.removeEventListener("pointercancel", onPointerCancel);
       host.removeEventListener("lostpointercapture", onLostCapture);
+      window.removeEventListener("pointerup", forgetFinger);
+      window.removeEventListener("pointercancel", forgetFinger);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);

@@ -569,3 +569,62 @@ test("an empty text box is removed when editing ends, and undo leaves it gone", 
   await page.keyboard.press("ControlOrMeta+z");
   await expect(elements(page)).toHaveCount(0);
 });
+
+test("two fingers pinch to zoom and drag to pan, and draw nothing", async ({ browser }) => {
+  const context = await browser.newContext({ hasTouch: true });
+  const page = await context.newPage();
+
+  try {
+    await newBoard(page);
+    const camera = () =>
+      page.$eval('[data-testid="board-canvas"] .origin-top-left', (el) => ({
+        scale: parseFloat((el as HTMLElement).style.getPropertyValue("--cam-scale")),
+        transform: (el as HTMLElement).style.transform,
+      }));
+
+    // Playwright's touchscreen only taps; the protocol takes several fingers.
+    // Each call lists every finger still down.
+    const cdp = await context.newCDPSession(page);
+    const fingers = async (
+      type: "touchStart" | "touchMove" | "touchEnd",
+      points: [number, number][],
+    ) => {
+      const touchPoints = [];
+      for (const [id, [x, y]] of points.entries()) {
+        const [px, py] = await canvasAt(page, x, y);
+        touchPoints.push({ x: px, y: py, id });
+      }
+      await cdp.send("Input.dispatchTouchEvent", { type, touchPoints });
+    };
+
+    // With a tool that places on a press: a press that turns into a pinch
+    // places nothing.
+    await pickTool(page, "n");
+    await fingers("touchStart", [[350, 300]]);
+    await fingers("touchStart", [[350, 300], [450, 300]]);
+    for (let i = 1; i <= 5; i++) {
+      await fingers("touchMove", [[350 - i * 20, 300], [450 + i * 20, 300]]);
+    }
+    await expect.poll(async () => (await camera()).scale).toBeCloseTo(3, 1);
+
+    const zoomed = await camera();
+    for (let i = 1; i <= 5; i++) {
+      await fingers("touchMove", [[250 + i * 20, 300], [550 + i * 20, 300]]);
+    }
+    await expect.poll(async () => (await camera()).transform).not.toBe(zoomed.transform);
+    expect((await camera()).scale).toBeCloseTo(3, 1);
+    await fingers("touchEnd", []);
+
+    await expect(elements(page)).toHaveCount(0);
+
+    // One finger still draws. The Note tool is still out, since nothing was
+    // placed, so the pen comes from the toolbar rather than a click and a key.
+    await page.getByRole("button", { name: "Pen (P)" }).click();
+    await fingers("touchStart", [[300, 300]]);
+    for (let i = 1; i <= 5; i++) await fingers("touchMove", [[300 + i * 10, 300 + i * 5]]);
+    await fingers("touchEnd", []);
+    await expect(page.locator('[data-kind="path"]')).toHaveCount(1);
+  } finally {
+    await context.close();
+  }
+});

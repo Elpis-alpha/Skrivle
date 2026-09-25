@@ -13,6 +13,7 @@ import {
   MIN_SCALE,
   nextZoom,
   panBy,
+  pinch,
   screenToBoard,
   visibleRect,
   zoomAt,
@@ -264,5 +265,63 @@ describe("animateViewport", () => {
     vi.advanceTimersByTime(250);
 
     expect(store.getSnapshot()).toEqual({ x: -50, y: -50, scale: 0.5 });
+  });
+});
+
+describe("pinch", () => {
+  const start = { x: -200, y: 80, scale: 1 };
+  const apart = [
+    { x: 300, y: 300 },
+    { x: 500, y: 300 },
+  ] as const;
+
+  it("zooms by how far the fingers spread, about the point between them", () => {
+    const grabbed = screenToBoard({ x: 400, y: 300 }, start);
+    const after = pinch(start, apart, [
+      { x: 200, y: 300 },
+      { x: 600, y: 300 },
+    ]);
+    expect(after.scale).toBeCloseTo(2);
+    const under = screenToBoard({ x: 400, y: 300 }, after);
+    expect(under.x).toBeCloseTo(grabbed.x);
+    expect(under.y).toBeCloseTo(grabbed.y);
+  });
+
+  it("pans by how far the point between the fingers moves", () => {
+    const after = pinch(start, apart, [
+      { x: 330, y: 260 },
+      { x: 530, y: 260 },
+    ]);
+    expect(after).toEqual({ x: -170, y: 40, scale: 1 });
+  });
+
+  // Doing both at once is what a real pinch is.
+  it("keeps what was between the fingers between them as they spread and move", () => {
+    const grabbed = screenToBoard({ x: 400, y: 300 }, start);
+    const after = pinch(start, apart, [
+      { x: 100, y: 500 },
+      { x: 250, y: 500 },
+    ]);
+    expect(after.scale).toBeCloseTo(0.75);
+    const under = screenToBoard({ x: 175, y: 500 }, after);
+    expect(under.x).toBeCloseTo(grabbed.x);
+    expect(under.y).toBeCloseTo(grabbed.y);
+  });
+
+  it("still pans at a zoom limit", () => {
+    const top = { x: 0, y: 0, scale: MAX_SCALE };
+    const after = pinch(top, apart, [
+      { x: 210, y: 300 },
+      { x: 610, y: 300 },
+    ]);
+    expect(after).toEqual({ x: 10, y: 0, scale: MAX_SCALE });
+  });
+
+  it("ignores two fingers on one spot rather than dividing by zero", () => {
+    const same = [
+      { x: 300, y: 300 },
+      { x: 300, y: 300 },
+    ] as const;
+    expect(pinch(start, same, same)).toEqual(start);
   });
 });

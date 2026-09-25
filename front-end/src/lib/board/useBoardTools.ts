@@ -19,6 +19,7 @@ import {
   moveBy,
   pointsOf,
   readElement,
+  removeElements,
   replacePoints,
   resizeElement,
   orderedIds,
@@ -129,12 +130,18 @@ export function useBoardTools({
       };
 
       // --- Placing and drawing ------------------------------------------
+      // Placed as the press ends rather than as it starts, so a press that
+      // turns into a pinch places nothing.
       if (tool === "note") {
-        const id = createNote(doc, start, { fill: style.fill, fontSize: style.fontSize });
-        dispatch({ type: "created", id });
-        // Straight into the text, because an empty note is not the point.
-        dispatch({ type: "edit", id });
-        return null;
+        return {
+          move() {},
+          end() {
+            const id = createNote(doc, start, { fill: style.fill, fontSize: style.fontSize });
+            dispatch({ type: "created", id });
+            // Straight into the text, because an empty note is not the point.
+            dispatch({ type: "edit", id });
+          },
+        };
       }
 
       if (tool === "pen") return beginStroke(doc, start, style, dispatch, host);
@@ -298,7 +305,11 @@ export function beginMove(
       for (const node of nodes) node.style.transform = "";
       onDone();
     },
-    cancel: stop,
+    // Whatever already reached the document goes back.
+    cancel() {
+      stop();
+      moveBy(doc, ids, -flushed.x, -flushed.y);
+    },
   };
 }
 
@@ -494,6 +505,7 @@ export function beginDrawOut(
     cancel() {
       stop();
       preview.clear(id);
+      removeElements(doc, [id]);
     },
   };
 }
@@ -586,7 +598,7 @@ export function beginStroke(
     cancel() {
       if (frame) cancelAnimationFrame(frame);
       if (timer) clearTimeout(timer);
-      flush();
+      removeElements(doc, [id]);
     },
   };
 }
