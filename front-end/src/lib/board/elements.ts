@@ -281,6 +281,20 @@ export function removeElements(doc: Y.Doc, ids: readonly string[]): void {
   }, LOCAL);
 }
 
+/**
+ * Remove a text box with nothing in it; say whether it did.
+ *
+ * Left empty, a text box is a stray "Type something" on the board. A note
+ * stays: it's still a note with nothing written on it.
+ */
+export function discardIfBlank(doc: Y.Doc, id: string): boolean {
+  const map = elements(doc).get(id);
+  if (!map || readElement(id, map).kind !== "text") return false;
+  if (textOf(map)?.toString().trim()) return false;
+  removeElements(doc, [id]);
+  return true;
+}
+
 /** Where a restack sends the selection in the paint order. */
 export type Restack = "front" | "back" | "forward" | "backward";
 

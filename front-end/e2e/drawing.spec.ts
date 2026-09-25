@@ -56,8 +56,10 @@ test("each tool draws the element it is named for", async ({ page }) => {
   await page.mouse.click(...(await canvasAt(page, 200, 200)));
   await page.keyboard.press("Escape");
 
+  // Something in it, or it would be removed as the edit ends.
   await pickTool(page, "t");
   await page.mouse.click(...(await canvasAt(page, 800, 320)));
+  await page.keyboard.type("label");
   await page.keyboard.press("Escape");
 
   await pickTool(page, "r");
@@ -539,4 +541,31 @@ test("brackets change what's on top, and Cmd steps one at a time", async ({ page
   await page.keyboard.press("ControlOrMeta+z");
   await expect.poll(() => kinds(page)).toEqual(["ellipse", "rect", "line"]);
   await expect(elements(page)).toHaveCount(3);
+});
+
+test("an empty text box is removed when editing ends, and undo leaves it gone", async ({
+  page,
+}) => {
+  await newBoard(page);
+  await pickTool(page, "r");
+  await dragOut(page, [200, 200], [300, 260]);
+  const textBox = page.locator('[data-kind="text"]');
+
+  // Left with Escape.
+  await pickTool(page, "t");
+  await page.mouse.click(...(await canvasAt(page, 500, 300)));
+  await expect(textBox.locator("textarea")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(textBox).toHaveCount(0);
+
+  // Left by pressing somewhere else on the board.
+  await pickTool(page, "t");
+  await page.mouse.click(...(await canvasAt(page, 500, 300)));
+  await expect(textBox.locator("textarea")).toBeFocused();
+  await page.mouse.click(...(await canvasAt(page, 700, 500)));
+  await expect(textBox).toHaveCount(0);
+
+  // Cmd+Z goes straight past both, to the rectangle.
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(elements(page)).toHaveCount(0);
 });

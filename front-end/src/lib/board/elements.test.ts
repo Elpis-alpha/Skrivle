@@ -9,6 +9,7 @@ import {
   contentBounds,
   createElement,
   createNote,
+  discardIfBlank,
   moveBy,
   newElementId,
   orderedIds,
@@ -226,6 +227,58 @@ describe("removeElements", () => {
   it("is one update", () => {
     const ids = [createElement(doc, rect), createElement(doc, rect)];
     expect(recordUpdates(() => removeElements(doc, ids))).toEqual([LOCAL]);
+  });
+});
+
+describe("discardIfBlank", () => {
+  const textBox = (text?: string) =>
+    createElement(doc, { ...rect, kind: "text", withText: true, text });
+
+  it("removes a text box with nothing in it", () => {
+    const id = textBox();
+    expect(discardIfBlank(doc, id)).toBe(true);
+    expect(elements(doc).has(id)).toBe(false);
+    expect(order(doc).toArray()).toEqual([]);
+  });
+
+  it("counts only whitespace as nothing", () => {
+    const id = textBox("  \n ");
+    expect(discardIfBlank(doc, id)).toBe(true);
+    expect(elements(doc).has(id)).toBe(false);
+  });
+
+  it("keeps a text box with something in it", () => {
+    const id = textBox("label");
+    expect(discardIfBlank(doc, id)).toBe(false);
+    expect(elements(doc).has(id)).toBe(true);
+  });
+
+  // An empty note is still a note on the board.
+  it("keeps an empty note", () => {
+    const id = createNote(doc, { x: 0, y: 0 }, { fill: "gray", fontSize: 14 });
+    expect(discardIfBlank(doc, id)).toBe(false);
+    expect(elements(doc).has(id)).toBe(true);
+  });
+
+  it("does nothing for an element that's already gone", () => {
+    expect(recordUpdates(() => expect(discardIfBlank(doc, "gone")).toBe(false))).toEqual([]);
+  });
+
+  // Removed in the undo step that made it, the box leaves that step with
+  // nothing to do, and Cmd+Z moves on to the one before rather than bringing
+  // back an empty box.
+  it("leaves nothing for undo to bring back", () => {
+    const undo = new Y.UndoManager([elements(doc), order(doc)], {
+      trackedOrigins: new Set([LOCAL]),
+    });
+    const before = createElement(doc, rect);
+    undo.stopCapturing();
+    const id = textBox();
+    discardIfBlank(doc, id);
+
+    undo.undo();
+    expect(elements(doc).has(id)).toBe(false);
+    expect(elements(doc).has(before)).toBe(false);
   });
 });
 

@@ -29,6 +29,7 @@ import type { BoardWithRole } from "@/lib/api/types";
 import { displayNameFor } from "@/lib/board/guest-name";
 import { centredOn, copyPayload, nudged, parsePayload } from "@/lib/board/clipboard";
 import {
+  discardIfBlank,
   holdsText,
   insertElements,
   moveBy,
@@ -99,13 +100,6 @@ export function BoardSurface({
   // reading localStorage here is safe.
   const name = displayNameFor(user);
 
-  const endEdit = useCallback(() => {
-    dispatch({ type: "edit", id: null });
-    // The editor is about to unmount; without this, focus falls to the body and
-    // the tool shortcuts stop responding until the canvas is clicked again.
-    hostRef.current?.focus({ preventScroll: true });
-  }, []);
-
   // The canvas manages its own focus. A press either starts a gesture, which
   // focuses the canvas, or opens a text editor, which focuses its own field —
   // and letting the browser ALSO focus the canvas (it is tabbable, for the
@@ -134,6 +128,30 @@ export function BoardSurface({
     lastNudge.current = null;
     stopCapturing();
   }, [stopCapturing]);
+
+  // An empty text box goes when its edit ends, in the undo step that made it —
+  // so Cmd+Z moves past it rather than bringing it back empty. Hence before a
+  // press closes that step, not after (onGestureStart).
+  const dropIfBlank = useCallback(
+    (id: string | null) => {
+      if (id && doc && discardIfBlank(doc, id)) dispatch({ type: "gone", ids: [id] });
+    },
+    [doc],
+  );
+
+  const endEdit = useCallback(() => {
+    dropIfBlank(tools.editingId);
+    dispatch({ type: "edit", id: null });
+    // The editor is about to unmount; without this, focus falls to the body and
+    // the tool shortcuts stop responding until the canvas is clicked again.
+    hostRef.current?.focus({ preventScroll: true });
+  }, [dropIfBlank, tools.editingId]);
+
+  // A press on the board ends any edit, so it's where a blank one goes too.
+  const onGestureStart = useCallback(() => {
+    dropIfBlank(tools.editingId);
+    closeUndo();
+  }, [dropIfBlank, tools.editingId, closeUndo]);
 
   // A style change does two things: it sets what the next element will look
   // like, and it repaints whatever is selected right now. Only the fields the
@@ -172,7 +190,7 @@ export function BoardSurface({
     store: viewport,
     state: tools,
     dispatch,
-    onGestureStart: closeUndo,
+    onGestureStart,
     preview,
   });
 
