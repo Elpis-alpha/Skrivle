@@ -129,10 +129,11 @@ port), which is exactly the trap: it would work here and break after deploy.
 ## Not built yet
 
 The board is built — the eight tools, selection, undo, pan/zoom with a zoom
-control and touch pinch, sharing, rename, peers' cursors and selections,
-copy/paste, nudge and z-order keys, and thumbnails. Still to come (see [`docs/ROADMAP.md`](../docs/ROADMAP.md)):
+control and touch pinch, sharing, rename, peers' cursors and selections with a
+list of who's here, copy/paste, nudge and z-order keys, and thumbnails. So is
+My Boards, with rename, duplicate and delete on each tile. Still to come (see
+[`docs/ROADMAP.md`](../docs/ROADMAP.md)):
 
-- Rename, duplicate and delete from the My Boards tiles (§10.15)
 - The text-size control for text boxes (§10.9) and the toolbar's "more" group
   (§10.5)
 - Phase 2, the native app

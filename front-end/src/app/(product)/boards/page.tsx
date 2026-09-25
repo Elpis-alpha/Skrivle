@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { BoardsList } from "@/components/boards/BoardsList";
 import { NewBoardButton } from "@/components/landing/NewBoardButton";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
   title: "My boards",
@@ -32,9 +33,11 @@ export default function BoardsPage() {
 
       <main className="mx-auto w-full max-w-(--container-marketing) px-4 py-8">
         {/* BoardsList reads ?claim= after an OAuth round trip. */}
-        <Suspense fallback={null}>
-          <BoardsList />
-        </Suspense>
+        <ToastProvider>
+          <Suspense fallback={null}>
+            <BoardsList />
+          </Suspense>
+        </ToastProvider>
       </main>
     </div>
   );

@@ -240,3 +240,59 @@ test("My Boards shows each board's role and when it was last edited", async ({ p
   await expect(tile).toContainText("owner");
   await expect(tile).toContainText("edited just now");
 });
+
+// §10.15 — the tile's ⋯ menu: Rename, Duplicate, and Delete behind a confirm.
+test("a board's tile menu renames, duplicates and deletes it", async ({ page }) => {
+  await signIn(page, "/boards");
+  await expect(page).toHaveURL(/\/boards$/);
+  await page.getByRole("button", { name: "New board" }).first().click();
+  await expect(page).toHaveURL(/\/board\/[a-z0-9-]{3,32}$/);
+  await expect(page.getByTestId("board-canvas")).toHaveAttribute("data-settled", "true");
+
+  // Something on it, so the copy has something to copy.
+  await page.getByTestId("board-canvas").click({ position: { x: 8, y: 8 } });
+  await page.keyboard.press("n");
+  await page.getByTestId("board-canvas").click({ position: { x: 300, y: 300 } });
+  await page.keyboard.type("carried over");
+  await page.keyboard.press("Escape");
+
+  await page.goto("/boards");
+  const tile = (title: string) =>
+    page.getByRole("link").filter({ has: page.getByText(title, { exact: true }) });
+  const more = (title: string) => page.getByRole("button", { name: `More for ${title}` });
+
+  await more("Untitled board").click();
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  const rename = page.getByRole("dialog", { name: "Rename board" });
+  await rename.getByLabel("Title").fill("Sprint");
+  await rename.getByRole("button", { name: "Save" }).click();
+  await expect(rename).toBeHidden();
+  await expect(tile("Sprint")).toBeVisible();
+
+  await more("Sprint").click();
+  await page.getByRole("menuitem", { name: "Duplicate" }).click();
+  await expect(tile("Sprint (copy)")).toBeVisible();
+
+  // Cancel keeps it.
+  await more("Sprint (copy)").click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  const confirm = page.getByRole("dialog", { name: "Delete “Sprint (copy)”?" });
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirm).toBeHidden();
+  await expect(tile("Sprint (copy)")).toBeVisible();
+
+  // The copy holds what the original did.
+  await tile("Sprint (copy)").click();
+  await expect(page.locator('[data-kind="note"]')).toContainText("carried over");
+  await page.goto("/boards");
+
+  await more("Sprint (copy)").click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await confirm.getByRole("button", { name: "Delete board" }).click();
+  await expect(tile("Sprint (copy)")).toHaveCount(0);
+
+  // All of it reached the server.
+  await page.reload();
+  await expect(tile("Sprint")).toBeVisible();
+  await expect(tile("Sprint (copy)")).toHaveCount(0);
+});

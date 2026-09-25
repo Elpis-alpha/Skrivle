@@ -84,6 +84,18 @@ export function renameBoard(id: string, title: string): Promise<Board> {
   });
 }
 
+/**
+ * A new board you own, holding a copy of this one's canvas and titled
+ * "<title> (copy)". Anyone signed in may copy a board they can reach.
+ *
+ * @throws ApiError 404 / 410 as getBoard, and 429 past the board-creation limit.
+ */
+export function duplicateBoard(id: string): Promise<Board> {
+  return apiFetch<Board>(`/api/boards/${encodeURIComponent(id)}/duplicate`, {
+    method: "POST",
+  });
+}
+
 /** Owner only. */
 export function deleteBoard(id: string): Promise<void> {
   return apiFetch<void>(`/api/boards/${encodeURIComponent(id)}`, {

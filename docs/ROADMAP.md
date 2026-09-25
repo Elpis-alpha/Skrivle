@@ -100,8 +100,9 @@ the v1 scope.
 - [x] Avatar cluster popover: who's here, and their role (§10.11). Each person
   publishes owner or editor over awareness, taken from the board's REST record
   so a claim updates it
-- [ ] My Boards tile menu — Rename, Delete with a confirm, Duplicate (needs a copy
-  endpoint) — and "edited 2h ago" (§10.15)
+- [x] My Boards tile menu — Rename, Delete with a confirm, Duplicate
+  (`POST /api/boards/:id/duplicate`, which copies an open board from memory) —
+  and "edited 2h ago" (§10.15). Deleting a board now removes its thumbnail too
 
 **Hardening**
 

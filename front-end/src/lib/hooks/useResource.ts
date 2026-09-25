@@ -14,6 +14,12 @@ export type UseResource<T> = Resource<T> & {
   reload: () => void;
   /** Replace the data without a round trip — for a mutation that already returned it. */
   set: (data: T) => void;
+  /**
+   * Change the loaded data in place — for a mutation that changes part of it.
+   * Applied to the latest data, so two landing together both stick. Does
+   * nothing until something has loaded.
+   */
+  update: (change: (data: T) => T) => void;
 };
 
 /**
@@ -98,5 +104,13 @@ export function useResource<T>(
     [],
   );
 
-  return { ...state, reload, set };
+  const update = useCallback(
+    (change: (data: T) => T) =>
+      setState((current) =>
+        current.status === "ready" ? { ...current, data: change(current.data) } : current,
+      ),
+    [],
+  );
+
+  return { ...state, reload, set, update };
 }

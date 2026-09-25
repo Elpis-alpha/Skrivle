@@ -544,6 +544,17 @@ Tile: `--radius-md`, 1px `--border`, `--elev-1`, a 16:10 canvas thumbnail on
 `text-2xs`). Hover: `--elev-2`. Overflow menu (⋯): Rename, Duplicate, Delete
 (`--danger` text) → Delete opens a confirm dialog.
 
+- The ⋯ sits at the right end of the title row, beside the tile's link rather
+  than inside it. Rename and Delete are the owner's; an editor's menu holds
+  Duplicate alone, since the API would refuse the others.
+- Rename opens a dialog with the title field; Delete asks
+  _"Delete “Sprint”?"_ over _"It goes for everyone with the link, and can't be
+  brought back."_, with a danger `Delete board`. A failure stays in the
+  dialog.
+- Duplicate asks nothing: the copy, _"Sprint (copy)"_, is yours and lands at
+  the top of the list, with a toast. Its thumbnail is drawn the first time it's
+  opened.
+
 ### 10.16 Dialog / modal base
 
 Centered, `--surface-raised`, `--radius-lg`, `--elev-3`, 24px padding, max-width
