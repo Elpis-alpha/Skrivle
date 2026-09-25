@@ -59,10 +59,12 @@ Notes:
   back-end already running for development would otherwise be reused silently,
   the test environment ignored, and the suite run against your **development
   database**.
-- The e2e back-end uses Redis logical database 1. Reset it with
-  `redis-cli -n 1 flushdb` if the per-IP rate limits start biting. The usual
-  symptom is board creation's limit after a few full runs: "New board" never
-  leaves `/`, and many specs fail on the same `toHaveURL`.
+- The e2e back-end uses Redis logical database 1, with every rate limit ten
+  times looser (`RATE_LIMIT_SCALE=10`, ignored in production): one run makes
+  more boards than one address may in an hour. Reset it with
+  `redis-cli -n 1 flushdb` if the limits still start biting after several full
+  runs. The usual symptom is "New board" never leaving `/`, and many specs
+  failing on the same `toHaveURL`.
 - It runs with `AUTH_DEV_CODES=1`, which returns the sign-in code in the
   `POST /api/auth/email/request` response instead of mailing it — that is how
   the tests sign in without an inbox. It is ignored in production.

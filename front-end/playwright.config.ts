@@ -70,6 +70,9 @@ export default defineConfig({
         // Hands sign-in codes back in the response so tests can sign in
         // without an inbox. Ignored in production.
         AUTH_DEV_CODES: "1",
+        // One run makes more boards than one address may in an hour, and
+        // every test comes from the same one. Ignored in production.
+        RATE_LIMIT_SCALE: "10",
       },
     },
     {

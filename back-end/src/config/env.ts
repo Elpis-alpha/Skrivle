@@ -144,6 +144,29 @@ if (devSignInCodes) {
   );
 }
 
+/**
+ * Test affordance: multiply every rate limit, so an end-to-end suite that
+ * creates more boards than one address may in an hour can still run in one
+ * go. Rather than off, so the counting itself stays under test.
+ *
+ * Ignored in production unconditionally, like AUTH_DEV_CODES: a deployment
+ * cannot be talked into loosening its limits.
+ */
+export const rateLimitScale = isProduction ? 1 : wholeNumber(process.env.RATE_LIMIT_SCALE) ?? 1;
+
+function wholeNumber(raw: string | undefined): number | null {
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  return n > 0 ? n : null;
+}
+
+if (rateLimitScale !== 1) {
+  console.warn(
+    `[skrivle] RATE_LIMIT_SCALE is ${rateLimitScale}: every rate limit is that many ` +
+      "times looser. Never use this outside development.",
+  );
+}
+
 /** True when a subsystem has enough configuration to actually be used. */
 export const featureEnabled = {
   // devSignInCodes keeps the email path advertised even with no mail

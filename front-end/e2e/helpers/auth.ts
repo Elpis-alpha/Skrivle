@@ -10,8 +10,9 @@ import { expect, type Page, test } from "@playwright/test";
  * answers 200 having sent nothing, and the second code would never arrive.
  *
  * A fresh address per run keeps the 5/hour per-address limit irrelevant. The
- * per-IP limits (20 requests, 30 verifies per hour) are why e2e gets its own
- * Redis logical database.
+ * per-IP limits (20 requests, 30 verifies per hour, ten times that under the
+ * e2e back-end's RATE_LIMIT_SCALE) are why e2e gets its own Redis logical
+ * database.
  */
 export async function signIn(page: Page, next?: string): Promise<string> {
   const email = `e2e-${Date.now()}-${test.info().workerIndex}@skrivle.test`;

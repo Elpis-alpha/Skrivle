@@ -6,6 +6,7 @@
 // (sign-in email sends, board creation, id enumeration, error reports).
 import type { NextFunction, Request, Response } from "express";
 import { hashToken } from "../auth/hash.js";
+import { rateLimitScale } from "../config/env.js";
 import { keys } from "./keys.js";
 import { redis } from "./client.js";
 
@@ -110,13 +111,16 @@ export function tooMany(res: Response, result: RateLimitResult): void {
   });
 }
 
+/** Always 1 in production; see rateLimitScale. */
+const per = (limit: number) => limit * rateLimitScale;
+
 /** The rules themselves, named so routes read declaratively. */
 export const RULES = {
-  otpRequestPerEmail: { bucket: "otp:email", limit: 5, windowSeconds: 3600 },
-  otpRequestPerIp: { bucket: "otp:ip", limit: 20, windowSeconds: 3600 },
-  otpVerifyPerIp: { bucket: "otpv:ip", limit: 30, windowSeconds: 3600 },
-  boardCreatePerIp: { bucket: "board:new", limit: 30, windowSeconds: 3600 },
-  availabilityPerIp: { bucket: "board:avail", limit: 60, windowSeconds: 60 },
-  uploadSignPerSession: { bucket: "upload:sign", limit: 60, windowSeconds: 3600 },
-  errorReportPerIp: { bucket: "errors:ip", limit: 30, windowSeconds: 3600 },
+  otpRequestPerEmail: { bucket: "otp:email", limit: per(5), windowSeconds: 3600 },
+  otpRequestPerIp: { bucket: "otp:ip", limit: per(20), windowSeconds: 3600 },
+  otpVerifyPerIp: { bucket: "otpv:ip", limit: per(30), windowSeconds: 3600 },
+  boardCreatePerIp: { bucket: "board:new", limit: per(30), windowSeconds: 3600 },
+  availabilityPerIp: { bucket: "board:avail", limit: per(60), windowSeconds: 60 },
+  uploadSignPerSession: { bucket: "upload:sign", limit: per(60), windowSeconds: 3600 },
+  errorReportPerIp: { bucket: "errors:ip", limit: per(30), windowSeconds: 3600 },
 } as const satisfies Record<string, RateLimitRule>;
