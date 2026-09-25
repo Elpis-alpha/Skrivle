@@ -78,7 +78,11 @@ export default function PrivacyPage() {
         </ul>
         <p>
           Standard server logs — IP address, timestamp, requested path — are kept
-          briefly for operating and securing the service.
+          briefly for operating and securing the service. When a page hits an
+          error, your browser sends the error message, where in the code it
+          happened, the page&apos;s path, and which browser you use, so the
+          error can be fixed. Those reports go into the same logs, and nothing
+          you drew goes with them.
         </p>
 
         <h2>Questions</h2>

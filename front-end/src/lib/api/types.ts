@@ -74,3 +74,15 @@ export type UploadSignature = {
   signature: string;
   publicId: string;
 };
+
+/** An error the browser ran into. Mirrors ErrorReport in openapi.yaml. */
+export type ErrorReport = {
+  /** What caught it: a React error boundary, `window.onerror`, or an unhandled rejection. */
+  source: "boundary" | "window" | "promise";
+  message: string;
+  stack?: string;
+  /** Next.js's hash of an error thrown while rendering on the server. */
+  digest?: string;
+  /** The page's path, without its query or fragment. */
+  path: string;
+};
