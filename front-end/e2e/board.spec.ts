@@ -216,3 +216,16 @@ test("the avatar cluster lists who's on the board, and who owns it", async ({ br
     await bob.close();
   }
 });
+
+// §10.15 — each tile says whose it is and when it last changed.
+test("My Boards shows each board's role and when it was last edited", async ({ page }) => {
+  await signIn(page, "/boards");
+  await expect(page).toHaveURL(/\/boards$/);
+  await page.getByRole("button", { name: "New board" }).first().click();
+  await expect(page).toHaveURL(/\/board\/[a-z0-9-]{3,32}$/);
+
+  await page.goto("/boards");
+  const tile = page.getByRole("link", { name: /Untitled board/ });
+  await expect(tile).toContainText("owner");
+  await expect(tile).toContainText("edited just now");
+});

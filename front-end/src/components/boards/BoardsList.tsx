@@ -14,33 +14,44 @@ import { listBoards } from "@/lib/api/boards";
 import type { BoardSummary } from "@/lib/api/types";
 import { useAuthLanding } from "@/lib/auth/landing";
 import { claimIfPossible } from "@/lib/board/claim";
+import { formatEdited } from "@/lib/board/edited";
 import { useResource } from "@/lib/hooks/useResource";
 import { useSession } from "@/lib/session/SessionProvider";
 
 function Tile({ board }: { board: BoardSummary }) {
   return (
-    <Link
-      href={`/board/${board.id}`}
-      className="group flex flex-col overflow-hidden rounded-md border border-border bg-surface transition-shadow duration-(--dur-fast) ease-standard hover:shadow-elev-2 focus-visible:focus-ring"
-    >
-      <div className="dot-grid relative aspect-4/3 border-b border-border bg-canvas">
-        {board.thumbnailUrl ? (
-          <Image
-            src={board.thumbnailUrl}
-            alt=""
-            fill
-            sizes="(max-width: 640px) 100vw, 240px"
-            className="object-cover"
-          />
-        ) : null}
-      </div>
-      <div className="flex items-baseline gap-2 px-3 py-2">
-        <span className="truncate text-sm font-medium text-ink">{board.title}</span>
-        {board.role === "owner" ? null : (
-          <span className="shrink-0 text-2xs text-ink-muted">shared</span>
-        )}
-      </div>
-    </Link>
+    <div className="group relative">
+      <Link
+        href={`/board/${board.id}`}
+        className={
+          "flex flex-col overflow-hidden rounded-md border border-border bg-surface shadow-elev-1 " +
+          "transition-shadow duration-(--dur-fast) ease-standard group-hover:shadow-elev-2 " +
+          "focus-visible:focus-ring"
+        }
+      >
+        {/* 16:10, the crop Cloudinary delivers (media/cloudinary.ts). */}
+        <div className="dot-grid relative aspect-16/10 border-b border-border bg-canvas">
+          {board.thumbnailUrl ? (
+            <Image
+              src={board.thumbnailUrl}
+              alt=""
+              fill
+              sizes="(max-width: 640px) 100vw, 240px"
+              className="object-cover"
+            />
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-0.5 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium text-ink">{board.title}</span>
+            <span className="shrink-0 rounded-pill bg-wg-100 px-1.5 py-px text-2xs text-ink-secondary">
+              {board.role}
+            </span>
+          </div>
+          <span className="text-xs text-ink-muted">{formatEdited(board.updatedAt)}</span>
+        </div>
+      </Link>
+    </div>
   );
 }
 
@@ -48,7 +59,15 @@ function Skeletons() {
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4" aria-busy>
       {[0, 1, 2].map((i) => (
-        <div key={i} className="aspect-4/3 animate-pulse rounded-md bg-wg-100" />
+        // The tile's own shape (§10.20), so the grid doesn't jump when it lands.
+        <div
+          key={i}
+          className="flex flex-col gap-2 overflow-hidden rounded-md border border-border bg-surface pb-3"
+        >
+          <div className="aspect-16/10 animate-pulse bg-wg-100" />
+          <div className="mx-3 h-3.5 w-2/3 animate-pulse rounded-sm bg-wg-100" />
+          <div className="mx-3 h-3 w-1/3 animate-pulse rounded-sm bg-wg-100" />
+        </div>
       ))}
       <span className="sr-only">Loading your boards…</span>
     </div>
