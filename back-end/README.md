@@ -109,6 +109,7 @@ PATCH  /api/boards/:id               { title }
 DELETE /api/boards/:id
 POST   /api/boards/:id/extend        { creatorToken } -> { expiresAt }
 POST   /api/boards/:id/claim         { creatorToken } -> board
+POST   /api/boards/:id/duplicate                      -> the copy, yours
 POST   /api/boards/:id/thumbnail     { publicId }     -> { thumbnailUrl }
 
 POST   /api/uploads/signature        { kind, boardId? } -> Cloudinary params

@@ -6,9 +6,13 @@
 // it. Roles gate *management* — rename, delete, extend, claim, and whether a
 // board shows up in My Boards — not drawing.
 import { Prisma, type Board, type CollaboratorRole } from "@prisma/client";
+import * as Y from "yjs";
 import { isValidCustomId, mintUniqueBoardId, normalizeBoardId } from "./board-id.js";
 import { hashToken, randomToken, verifyToken } from "../auth/hash.js";
 import { prisma } from "../db/prisma.js";
+import { deleteAssets, publicIdFor } from "../media/cloudinary.js";
+import { loadDocState } from "../realtime/board-store.js";
+import { peekDoc } from "../realtime/doc-manager.js";
 
 /** How long an anonymous board lives before the sweep deletes it. */
 export const GUEST_TTL_HOURS = 24;
@@ -22,7 +26,12 @@ export type CreateBoardInput = {
   customId?: string | undefined;
   title?: string | undefined;
   userId?: string | undefined;
+  /** A canvas to start from, written in the same insert as the board. */
+  docState?: Uint8Array | null | undefined;
 };
+
+/** The longest title a board may have; the REST schemas enforce the same. */
+export const MAX_TITLE = 120;
 
 export type CreatedBoard = {
   board: Board;
@@ -72,6 +81,7 @@ export async function createBoard(input: CreateBoardInput): Promise<CreatedBoard
     ...(input.userId
       ? { collaborators: { create: { userId: input.userId, role: "owner" as CollaboratorRole } } }
       : {}),
+    ...(input.docState ? { doc: { create: { docState: Buffer.from(input.docState) } } } : {}),
   };
 
   // A custom id is the user's choice, so a collision is their problem to hear
@@ -226,13 +236,48 @@ export async function renameBoard(
   });
 }
 
-/** Delete. Owner only. Cascades to the doc and collaborator rows. */
+/**
+ * Delete. Owner only. Cascades to the doc and collaborator rows.
+ *
+ * The thumbnail goes first, for the expiry sweep's reason: a thumbnail
+ * deleted for a board that survives is redrawn on its next save, but one left
+ * behind by a deleted board is an orphan nothing will ever clean up.
+ */
 export async function deleteBoard(id: string, userId: string): Promise<Board | null> {
   const board = await findBoard(id);
   if (!board) return null;
   if ((await roleOf(id, userId)) !== "owner") return null;
 
+  if (board.thumbnailId) await deleteAssets([publicIdFor("thumbnail", board.id)]);
   await prisma.board.delete({ where: { id: board.id } });
+  return board;
+}
+
+const COPY_SUFFIX = " (copy)";
+
+/** "Sprint" → "Sprint (copy)", cut to fit rather than refused. */
+export function copyTitle(title: string): string {
+  return title.slice(0, MAX_TITLE - COPY_SUFFIX.length).trimEnd() + COPY_SUFFIX;
+}
+
+/**
+ * A new board for `userId`, holding a copy of `source`'s canvas.
+ *
+ * Anyone with the link can already see and edit the canvas, so anyone signed
+ * in may copy it: the copy is theirs, and the original is untouched. An open
+ * board is copied from memory, since its last snapshot can be 30s behind.
+ *
+ * The thumbnail isn't copied. Cloudinary ids follow the board id, and the
+ * original's is overwritten as the original changes, so pointing the copy at
+ * it would show the wrong board. The copy's is drawn when it's first opened.
+ */
+export async function duplicateBoard(
+  source: Pick<Board, "id" | "title">,
+  userId: string,
+): Promise<Board> {
+  const live = peekDoc(source.id);
+  const docState = live ? Y.encodeStateAsUpdate(live) : await loadDocState(source.id);
+  const { board } = await createBoard({ userId, title: copyTitle(source.title), docState });
   return board;
 }
 

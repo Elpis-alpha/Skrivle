@@ -8,6 +8,7 @@ import {
   claimBoard,
   createBoard,
   deleteBoard,
+  duplicateBoard,
   extendBoard,
   findBoard,
   findBoardLifecycle,
@@ -15,6 +16,7 @@ import {
   isAvailable,
   isExpired,
   listBoards,
+  MAX_TITLE,
   renameBoard,
   roleOf,
 } from "../../boards/service.js";
@@ -28,11 +30,11 @@ export const boardsRouter = Router();
 
 const createSchema = z.object({
   customId: z.string().trim().min(3).max(32).optional(),
-  title: z.string().trim().max(120).optional(),
+  title: z.string().trim().max(MAX_TITLE).optional(),
 });
 
 const renameSchema = z.object({
-  title: z.string().trim().min(1).max(120),
+  title: z.string().trim().min(1).max(MAX_TITLE),
 });
 
 const idParam = z.object({
@@ -142,7 +144,16 @@ boardsRouter.get(
 
 // --- Lookup ------------------------------------------------------------------
 
-boardsRouter.get("/:id", validate(idParam, "params"), optionalSession, async (req, res) => {
+/**
+ * The live board at the route's id, or null having answered for it: 404 when
+ * nobody holds the id, and 410 when it has expired — the board was real and is
+ * gone, which is a different thing to say to the user (STYLE_GUIDE §10.21
+ * specifies distinct states).
+ */
+async function liveBoardOr404(
+  req: import("express").Request,
+  res: import("express").Response,
+) {
   const board = await findBoard(boardIdOf(req));
 
   if (!board) {
@@ -152,11 +163,9 @@ boardsRouter.get("/:id", validate(idParam, "params"), optionalSession, async (re
         next: "Check the link, or create a new board with this id.",
       },
     });
-    return;
+    return null;
   }
 
-  // 410 rather than 404: the board was real and is gone, which is a different
-  // thing to say to the user (STYLE_GUIDE §10.21 specifies distinct states).
   if (isExpired(board)) {
     res.status(410).json({
       error: {
@@ -164,12 +173,35 @@ boardsRouter.get("/:id", validate(idParam, "params"), optionalSession, async (re
         next: "Guest boards last 24 hours. Create a new board to start again.",
       },
     });
-    return;
+    return null;
   }
+
+  return board;
+}
+
+boardsRouter.get("/:id", validate(idParam, "params"), optionalSession, async (req, res) => {
+  const board = await liveBoardOr404(req, res);
+  if (!board) return;
 
   const role = req.user ? await roleOf(board.id, req.user.id) : null;
   res.json({ ...publicBoard(board), role });
 });
+
+// --- Duplicate ---------------------------------------------------------------
+
+boardsRouter.post(
+  "/:id/duplicate",
+  validate(idParam, "params"),
+  limitByIp(RULES.boardCreatePerIp),
+  requireSession,
+  async (req, res) => {
+    const source = await liveBoardOr404(req, res);
+    if (!source) return;
+
+    const board = await duplicateBoard(source, req.user!.id);
+    res.status(201).json(publicBoard(board));
+  },
+);
 
 // --- Rename / delete ---------------------------------------------------------
 

@@ -10,9 +10,24 @@ vi.mock("../../mail/transport.js", () => ({
   verifyMailTransport: vi.fn(async () => true),
 }));
 
+const deletedAssets: string[][] = [];
+vi.mock("../../media/cloudinary.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../media/cloudinary.js")>();
+  return {
+    ...actual,
+    deleteAssets: vi.fn(async (ids: string[]) => {
+      deletedAssets.push(ids);
+    }),
+  };
+});
+
+const Y = await import("yjs");
 const { createServer } = await import("../../server.js");
 const { prisma } = await import("../../db/prisma.js");
 const { flushTestKeys, useRedis } = await import("../../test/redis-harness.js");
+const { publicIdFor } = await import("../../media/cloudinary.js");
+const { loadDocState, saveDocState } = await import("../../realtime/board-store.js");
+const { acquireDoc, resetRegistry } = await import("../../realtime/doc-manager.js");
 
 useRedis();
 const { app } = createServer();
@@ -29,6 +44,8 @@ async function signedIn(email: string) {
 
 beforeEach(async () => {
   sent.length = 0;
+  deletedAssets.length = 0;
+  resetRegistry();
   await flushTestKeys("otp:*", "otpcool:*", "rl:*", "sess:*", "usess:*");
   await prisma.boardDoc.deleteMany();
   await prisma.board.deleteMany();
@@ -308,5 +325,143 @@ describe("PATCH / DELETE /api/boards/:id", () => {
     const other = await signedIn("other@example.com");
     expect((await other.delete(`/api/boards/${created.body.id}`)).status).toBe(403);
     expect(await prisma.board.count()).toBe(1);
+  });
+
+  // As the expiry sweep does, or Cloudinary keeps an image nothing points at.
+  it("removes a deleted board's thumbnail", async () => {
+    const agent = await signedIn("owner@example.com");
+    const created = await agent.post("/api/boards").send({});
+    const id = created.body.id as string;
+    await prisma.board.update({
+      where: { id },
+      data: { thumbnailId: publicIdFor("thumbnail", id) },
+    });
+
+    await agent.delete(`/api/boards/${id}`);
+    expect(deletedAssets).toEqual([[publicIdFor("thumbnail", id)]]);
+  });
+
+  it("leaves the thumbnail alone when the delete is refused", async () => {
+    const owner = await signedIn("owner@example.com");
+    const created = await owner.post("/api/boards").send({});
+    const id = created.body.id as string;
+    await prisma.board.update({
+      where: { id },
+      data: { thumbnailId: publicIdFor("thumbnail", id) },
+    });
+
+    const other = await signedIn("other@example.com");
+    await other.delete(`/api/boards/${id}`);
+    expect(deletedAssets).toEqual([]);
+  });
+});
+
+/** A doc state holding one note, and a way to read it back. */
+function stateWith(text: string): Uint8Array {
+  const doc = new Y.Doc();
+  doc.getMap("elements").set("n1", text);
+  return Y.encodeStateAsUpdate(doc);
+}
+function textIn(state: Uint8Array | null): unknown {
+  if (!state) return undefined;
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, state);
+  return doc.getMap("elements").get("n1");
+}
+
+describe("POST /api/boards/:id/duplicate", () => {
+  it("copies the canvas into a new board the caller owns", async () => {
+    const agent = await signedIn("owner@example.com");
+    const source = await agent.post("/api/boards").send({ title: "Sprint" });
+    await saveDocState(source.body.id, stateWith("hello"));
+
+    const res = await agent.post(`/api/boards/${source.body.id}/duplicate`);
+
+    expect(res.status).toBe(201);
+    expect(res.body.id).not.toBe(source.body.id);
+    expect(res.body.title).toBe("Sprint (copy)");
+    expect(res.body.hasOwner).toBe(true);
+    expect(res.body.isEphemeral).toBe(false);
+    expect(textIn(await loadDocState(res.body.id))).toBe("hello");
+
+    const mine = await agent.get("/api/boards");
+    expect(mine.body.boards.map((b: { id: string }) => b.id)).toContain(res.body.id);
+  });
+
+  // The snapshot is up to 30s behind a board people are drawing on.
+  it("copies what's on the board now, not only what was last saved", async () => {
+    const agent = await signedIn("owner@example.com");
+    const source = await agent.post("/api/boards").send({});
+    await saveDocState(source.body.id, stateWith("saved"));
+    const live = await acquireDoc(source.body.id);
+    live.getMap("elements").set("n1", "not saved yet");
+
+    const res = await agent.post(`/api/boards/${source.body.id}/duplicate`);
+    expect(textIn(await loadDocState(res.body.id))).toBe("not saved yet");
+  });
+
+  it("copies a board nothing has been drawn on yet", async () => {
+    const agent = await signedIn("owner@example.com");
+    const source = await agent.post("/api/boards").send({});
+
+    const res = await agent.post(`/api/boards/${source.body.id}/duplicate`);
+    expect(res.status).toBe(201);
+    expect(await loadDocState(res.body.id)).toBeNull();
+  });
+
+  // Anyone with the link can already see and edit it; the copy is theirs.
+  it("lets anyone signed in copy a board they don't own", async () => {
+    const owner = await signedIn("owner@example.com");
+    const source = await owner.post("/api/boards").send({});
+    await saveDocState(source.body.id, stateWith("hello"));
+
+    const other = await signedIn("other@example.com");
+    const res = await other.post(`/api/boards/${source.body.id}/duplicate`);
+
+    expect(res.status).toBe(201);
+    const theirs = await other.get("/api/boards");
+    expect(theirs.body.boards).toContainEqual(
+      expect.objectContaining({ id: res.body.id, role: "owner" }),
+    );
+  });
+
+  it("keeps a long title within the limit", async () => {
+    const agent = await signedIn("owner@example.com");
+    const source = await agent.post("/api/boards").send({ title: "x".repeat(120) });
+
+    const res = await agent.post(`/api/boards/${source.body.id}/duplicate`);
+    expect(res.body.title).toHaveLength(120);
+    expect(res.body.title.endsWith(" (copy)")).toBe(true);
+  });
+
+  // Cloudinary ids follow the board id; the copy's is drawn when it's opened.
+  it("doesn't point the copy at the original's thumbnail", async () => {
+    const agent = await signedIn("owner@example.com");
+    const source = await agent.post("/api/boards").send({});
+    await prisma.board.update({
+      where: { id: source.body.id },
+      data: { thumbnailId: publicIdFor("thumbnail", source.body.id) },
+    });
+
+    const res = await agent.post(`/api/boards/${source.body.id}/duplicate`);
+    const copy = await prisma.board.findUnique({ where: { id: res.body.id } });
+    expect(copy?.thumbnailId).toBeNull();
+  });
+
+  it("needs a session", async () => {
+    const source = await request(app).post("/api/boards").send({});
+    expect((await request(app).post(`/api/boards/${source.body.id}/duplicate`)).status).toBe(401);
+  });
+
+  it("404s an id nobody holds, and 410s an expired board", async () => {
+    const agent = await signedIn("owner@example.com");
+    expect((await agent.post("/api/boards/zzzzz/duplicate")).status).toBe(404);
+
+    const source = await request(app).post("/api/boards").send({});
+    await prisma.board.update({
+      where: { id: source.body.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    expect((await agent.post(`/api/boards/${source.body.id}/duplicate`)).status).toBe(410);
   });
 });

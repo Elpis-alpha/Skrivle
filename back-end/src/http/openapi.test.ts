@@ -31,6 +31,7 @@ const EXPECTED_OPERATIONS: [string, string][] = [
   ["delete", "/api/boards/{id}"],
   ["post", "/api/boards/{id}/extend"],
   ["post", "/api/boards/{id}/claim"],
+  ["post", "/api/boards/{id}/duplicate"],
   ["post", "/api/boards/{id}/thumbnail"],
   ["post", "/api/uploads/signature"],
   ["patch", "/api/me"],
