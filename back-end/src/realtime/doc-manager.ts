@@ -4,6 +4,8 @@
 // rehydrated from board_docs on first join and released when the room empties.
 import * as Y from "yjs";
 import { loadDocState } from "./board-store.js";
+import { MAX_BOARD_BYTES } from "./limits.js";
+import { readUpdates } from "./update-log.js";
 
 type DocEntry = {
   doc: Y.Doc;
@@ -11,6 +13,15 @@ type DocEntry = {
   sockets: Set<string>;
   /** Has the doc changed since the last snapshot? */
   dirty: boolean;
+  /**
+   * About how big the encoded doc is: its size when last measured, plus every
+   * update applied since. That over-counts, since updates merge and a moved
+   * element replaces its old position rather than adding to it, so it is only
+   * ever trusted to say there is room. See hasRoom.
+   */
+  bytes: number;
+  /** When `bytes` was last an exact measurement rather than a running total. */
+  measuredAt: number;
   /**
    * Resolves once the stored snapshot has been applied. Two clients joining at
    * the same moment must not both rehydrate — the second awaits the first's
@@ -40,11 +51,33 @@ export async function acquireDoc(boardId: string): Promise<Y.Doc> {
     doc,
     sockets: new Set(),
     dirty: false,
-    ready: (async () => {
-      const snapshot = await loadDocState(boardId);
-      if (snapshot) Y.applyUpdate(doc, snapshot, "rehydrate");
-    })(),
+    bytes: 0,
+    measuredAt: 0,
+    ready: Promise.resolve(),
   };
+  entry.ready = (async () => {
+    const snapshot = await loadDocState(boardId);
+    if (snapshot) {
+      Y.applyUpdate(doc, snapshot, "rehydrate");
+      entry.bytes = snapshot.byteLength;
+    }
+
+    // Whatever was accepted after that snapshot was written. Present only
+    // when the process died before the next one: a clean release trims the
+    // log to nothing.
+    const logged = await readUpdates(boardId);
+    for (const update of logged) {
+      try {
+        Y.applyUpdate(doc, update, "rehydrate");
+        entry.bytes += update.byteLength;
+      } catch {
+        // One unreadable entry must not cost the rest of the board.
+      }
+    }
+    // Recovered work exists only in the log until a snapshot holds it, and
+    // the log is only trimmed by one. Queue it.
+    if (logged.length > 0) entry.dirty = true;
+  })();
   docs.set(boardId, entry);
 
   try {
@@ -101,6 +134,42 @@ export function markDirty(boardId: string): void {
 export function clearDirty(boardId: string): void {
   const entry = docs.get(boardId);
   if (entry) entry.dirty = false;
+}
+
+/**
+ * Whether a board can take another `incoming` bytes.
+ *
+ * The running total answers for free while it says yes. Once it says no the
+ * doc is measured for real, at most once a second, since encoding a board at
+ * its ceiling on every update would be the very cost the ceiling is there to
+ * prevent.
+ */
+export function hasRoom(boardId: string, incoming: number, now = Date.now()): boolean {
+  const entry = docs.get(boardId);
+  if (!entry) return true;
+  if (entry.bytes + incoming <= MAX_BOARD_BYTES) return true;
+
+  if (now - entry.measuredAt >= MEASURE_MIN_MS) {
+    entry.bytes = Y.encodeStateAsUpdate(entry.doc).byteLength;
+    entry.measuredAt = now;
+  }
+  return entry.bytes + incoming <= MAX_BOARD_BYTES;
+}
+
+const MEASURE_MIN_MS = 1000;
+
+/** Count an applied update towards the board's size. */
+export function addBytes(boardId: string, bytes: number): void {
+  const entry = docs.get(boardId);
+  if (entry) entry.bytes += bytes;
+}
+
+/** Record the board's exact size — the snapshot writer has just encoded it. */
+export function setBytes(boardId: string, bytes: number, now = Date.now()): void {
+  const entry = docs.get(boardId);
+  if (!entry) return;
+  entry.bytes = bytes;
+  entry.measuredAt = now;
 }
 
 /** Boards with unsaved changes — used by the snapshot sweep. */

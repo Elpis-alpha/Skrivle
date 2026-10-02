@@ -40,6 +40,14 @@ export const keys = {
    */
   oauthState: (state: string) => `oauth:${state}`,
 
+  /**
+   * A board's update log: every canvas update accepted since its last snapshot,
+   * oldest first, with a seal marker for each snapshot in flight. Trimmed as
+   * snapshots land, so it holds about 30 seconds of edits and no key outlives
+   * its board. See realtime/update-log.ts.
+   */
+  updateLog: (boardId: string) => `ulog:${boardId}`,
+
   /** Rate-limit counter. `subject` is an email hash, an IP, or a session id. */
   rateLimit: (bucket: string, subject: string) => `rl:${bucket}:${subject}`,
 } as const;

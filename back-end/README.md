@@ -83,7 +83,7 @@ hangs on the pooled connection, add a `directUrl` to the `datasource` block in
 | `src/boards/` | id rules (mirrors the front-end) + board service |
 | `src/http/` | `/api` routes (`boards`, `auth`, `uploads`, `me`) + middleware |
 | `src/http/openapi.ts` / `openapi.yaml` | hand-authored OpenAPI 3.1 spec, served at `/api/openapi.json` and rendered by Scalar at `/docs` |
-| `src/realtime/` | Socket.IO gateway, doc registry, Yjs bridge, awareness, snapshots |
+| `src/realtime/` | Socket.IO gateway, doc registry, Yjs bridge, awareness, snapshots, the update log, socket limits |
 | `src/jobs/expiry-sweep.ts` | deletes boards past `expires_at`, and their thumbnails |
 | `src/presence/cursor-colors.ts` | cursor palette, mirrors the front-end order |
 | `src/protocol/events.ts` | Socket.IO event names + wire-protocol reference |
@@ -132,6 +132,20 @@ board is chosen in the Socket.IO **handshake**, not by an event.
   schema is append-only.
 - **Anyone with a board link can edit it.** That is the product. Roles gate
   management (rename, delete, extend, claim), not drawing.
+- **So each socket is limited, not each person.** A link is the only thing
+  between the public and a board, so `src/realtime/limits.ts` bounds what one
+  connection can cost the rest: a token bucket on canvas and cursor updates, a
+  4 MB ceiling on a board's encoded size, and awareness a socket may send only
+  for its own client id. An update dropped for arriving too fast is asked for
+  again a second later, so a limit delays work rather than losing it. A full
+  board still takes deletions.
+- **A crash loses nothing that was accepted.** Snapshots are written every 30
+  seconds, so between them every accepted update is also appended to a Redis
+  list (`src/realtime/update-log.ts`). A board loads as its snapshot plus its
+  log, and each snapshot trims the log up to a seal it wrote as it encoded.
+  Redis because this is high-churn data that lives under a minute; the cost is
+  that a power cut on the host can lose the last second, which is how often
+  Redis syncs its append-only file.
 - **Uploads go browser-to-Cloudinary** against a server-minted signature, so no
   image data passes through this process. Public ids are derived from the board
   or user id, which makes a signature impossible to point at someone else's asset.

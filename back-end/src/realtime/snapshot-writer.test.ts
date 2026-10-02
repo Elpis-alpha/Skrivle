@@ -2,9 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 import { createBoard } from "../boards/service.js";
 import { prisma } from "../db/prisma.js";
+import { useRedis } from "../test/redis-harness.js";
 import { loadDocState } from "./board-store.js";
 import { acquireDoc, dirtyBoardIds, markDirty, resetRegistry } from "./doc-manager.js";
 import { persistSnapshot } from "./snapshot-writer.js";
+
+// A snapshot seals and trims the board's update log, which is in Redis.
+useRedis();
 
 beforeEach(async () => {
   resetRegistry();

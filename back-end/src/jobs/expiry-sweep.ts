@@ -8,6 +8,7 @@ import { prisma } from "../db/prisma.js";
 import { reportError } from "../errors/report.js";
 import { deleteAssets, publicIdFor } from "../media/cloudinary.js";
 import { peekDoc } from "../realtime/doc-manager.js";
+import { dropLogs } from "../realtime/update-log.js";
 
 export const SWEEP_INTERVAL_MS = 15 * 60_000;
 
@@ -79,6 +80,8 @@ export async function sweepExpiredBoards(now = new Date()): Promise<SweepResult>
     // board_docs and board_collaborators cascade from this.
     const result = await prisma.board.deleteMany({ where: { id: { in: ids } } });
     deleted = result.count;
+    // Only a board that crashed with edits unsaved still has one.
+    await dropLogs(ids);
 
     if (deleted > 0) console.log(`[skrivle] expiry sweep removed ${deleted} board(s)`);
   } catch (err) {

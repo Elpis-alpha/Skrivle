@@ -26,12 +26,23 @@ resolution; the server is a relay plus the authority on persistence.
 
 - **Awareness** (live cursors, name, color, role, and what each person has
   selected) rides the Yjs awareness protocol — ephemeral, never persisted. The
-  server relays it without reading it, so a new presence field is a front-end
-  change on both ends of the wire and nothing in between. It follows that
+  server relays it without reading the state, so a new presence field is a
+  front-end change on both ends of the wire and nothing in between. It follows that
   every field is the sender's own word: fine for a label, never for a
   permission, which the server checks against its own records.
 - **Document updates** (shapes, notes, text, strokes) are Yjs updates — applied to
   the in-memory doc and fanned out to other clients in the board room.
+
+A link is all it takes to edit a board, so what one socket can send is bounded
+(`back-end/src/realtime/limits.ts`). Canvas and cursor updates each draw on a
+token bucket sized at two to three times what the client sends. A cursor update
+over the limit is dropped. A canvas update over it is dropped too, and a second
+later the server sends its state vector again, which the client answers with
+everything the server lacks: the limit delays work, it doesn't lose it. A board's
+encoded size is capped at 4 MB, and a full board still accepts deletions. And a
+socket may send awareness only for its own client id, which it holds through a
+`presenceKey` sent in the handshake, so the socket it reconnects on can carry on
+as the same cursor while no one else can move or retract it.
 
 On the client, drawing runs on two clocks. The person drawing sees every frame:
 a move, resize, shape or pen stroke is painted straight onto the DOM as the
@@ -51,6 +62,18 @@ The Yjs document is serialized to a binary blob and written to `board_docs`:
 
 On first connection to a board with no in-memory doc, the server loads the blob
 and rehydrates the Yjs doc.
+
+Between snapshots, every update the server accepts is also appended to a Redis
+list per board, the **update log**. A board loads as its blob plus whatever its
+log still holds, so a crash costs nothing that was accepted rather than up to 30
+seconds. Writing a snapshot appends a seal to the log in the same tick the doc
+is encoded, and trims the log just past that seal once the blob has landed: an
+edit that arrives during the write sits after the seal and survives the trim.
+Snapshot writes for one board never overlap, since an older blob landing after
+a newer one had trimmed the log would lose the difference. The log is in Redis
+because it is the high-churn data the schema keeps out of Postgres. Redis runs
+with its append-only file on, which survives the API crashing or redeploying; a
+power cut on the host can lose the last second.
 
 **Retention is keep-latest** — exactly one row per board, overwritten in place.
 A Yjs update encodes the document's whole history, so the newest blob is

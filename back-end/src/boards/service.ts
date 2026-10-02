@@ -13,6 +13,7 @@ import { prisma } from "../db/prisma.js";
 import { deleteAssets, publicIdFor } from "../media/cloudinary.js";
 import { loadDocState } from "../realtime/board-store.js";
 import { peekDoc } from "../realtime/doc-manager.js";
+import { dropLogs } from "../realtime/update-log.js";
 
 /** How long an anonymous board lives before the sweep deletes it. */
 export const GUEST_TTL_HOURS = 24;
@@ -250,6 +251,7 @@ export async function deleteBoard(id: string, userId: string): Promise<Board | n
 
   if (board.thumbnailId) await deleteAssets([publicIdFor("thumbnail", board.id)]);
   await prisma.board.delete({ where: { id: board.id } });
+  await dropLogs([board.id]);
   return board;
 }
 

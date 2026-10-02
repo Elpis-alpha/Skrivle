@@ -26,6 +26,7 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "lib0": "^0.2.119",
     "nodemailer": "^10.0.0",
     "prisma": "^6.7.0",
     "redis": "^6.2.1",

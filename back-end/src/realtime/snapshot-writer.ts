@@ -9,10 +9,14 @@
 // the newest blob is self-sufficient; keeping older ones would buy recovery
 // from a corrupt write at the cost of an ever-growing table and an index scan
 // on every rehydrate.
+//
+// Between snapshots, realtime/update-log.ts holds what a crash would otherwise
+// take. Each snapshot seals that log as it encodes and trims it once it lands.
 import * as Y from "yjs";
 import { reportError } from "../errors/report.js";
 import { saveDocState } from "./board-store.js";
-import { clearDirty, dirtyBoardIds, markDirty, peekDoc } from "./doc-manager.js";
+import { clearDirty, dirtyBoardIds, markDirty, peekDoc, setBytes } from "./doc-manager.js";
+import { sealLog, trimLog } from "./update-log.js";
 
 export const SNAPSHOT_INTERVAL_MS = 30_000;
 
@@ -56,25 +60,55 @@ export async function flushDirty(): Promise<void> {
   }
 }
 
+/** The write in flight for each board, so the next one can wait its turn. */
+const writing = new Map<string, Promise<void>>();
+
 /**
  * Persist one board's current doc state.
  *
+ * One write at a time per board. Two overlapping ones — the sweep's and the
+ * last person leaving — could land out of order, leaving the older blob in
+ * Postgres after the newer one had trimmed the log that covered the difference.
+ * With nothing in flight the write starts in this tick, so the caller decides
+ * the moment being saved.
+ */
+export function persistSnapshot(boardId: string): Promise<void> {
+  const before = writing.get(boardId);
+  const run = () => writeSnapshot(boardId);
+  const mine = before ? before.then(run, run) : run();
+
+  writing.set(boardId, mine);
+  const done = () => {
+    if (writing.get(boardId) === mine) writing.delete(boardId);
+  };
+  mine.then(done, done);
+  return mine;
+}
+
+/**
  * The dirty flag is cleared in the same tick the state is encoded, not after
  * the write lands. Clearing it afterwards also cleared it for any edit that
  * arrived during the write — an edit the blob doesn't contain — and shutdown
  * only flushes boards still flagged, so that edit was lost on every deploy. A
  * failed write flags the board again, leaving it queued for the next sweep.
+ *
+ * The log is sealed in that tick too, for the same reason: the seal has to sit
+ * between the updates this blob holds and the ones it doesn't.
  */
-export async function persistSnapshot(boardId: string): Promise<void> {
+async function writeSnapshot(boardId: string): Promise<void> {
   const doc = peekDoc(boardId);
   if (!doc) return;
 
   const state = Y.encodeStateAsUpdate(doc);
   clearDirty(boardId);
+  setBytes(boardId, state.byteLength);
+  const sealed = sealLog(boardId);
+
   try {
     await saveDocState(boardId, state);
   } catch (err) {
     markDirty(boardId);
     throw err;
   }
+  await trimLog(boardId, await sealed);
 }

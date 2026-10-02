@@ -10,11 +10,12 @@ vi.mock("../mail/transport.js", () => ({
 
 const { createServer } = await import("../server.js");
 const { prisma } = await import("../db/prisma.js");
-const { useRedis } = await import("../test/redis-harness.js");
+const { flushTestKeys, useRedis } = await import("../test/redis-harness.js");
 const { EVENTS, HANDSHAKE_ERRORS } = await import("../protocol/events.js");
 const { createBoard } = await import("../boards/service.js");
 const { resetRegistry } = await import("./doc-manager.js");
 const { resetAwarenessRegistry } = await import("./awareness.js");
+const { MAX_BOARD_BYTES, MAX_CLIENT_IDS_PER_SOCKET, SOCKET_RULES } = await import("./limits.js");
 
 useRedis();
 
@@ -39,11 +40,15 @@ afterAll(async () => {
 });
 
 /** Connect a client to a board and wait for board:joined. */
-function connect(boardId: string, name = "Tester"): Promise<ClientSocket> {
+function connect(
+  boardId: string,
+  name = "Tester",
+  auth: Record<string, unknown> = {},
+): Promise<ClientSocket> {
   return new Promise((resolve, reject) => {
     const socket = ioClient(`http://localhost:${port}`, {
       path: "/socket.io",
-      auth: { boardId, name },
+      auth: { boardId, name, ...auth },
       transports: ["websocket"],
       forceNew: true,
     });
@@ -74,6 +79,7 @@ beforeEach(async () => {
   for (const socket of open.splice(0)) socket.close();
   resetRegistry();
   resetAwarenessRegistry();
+  await flushTestKeys("ulog:*");
   await prisma.boardDoc.deleteMany();
   await prisma.board.deleteMany();
   await prisma.user.deleteMany();
@@ -315,5 +321,202 @@ describe("awareness", () => {
     const { applyAwarenessUpdate } = await import("y-protocols/awareness");
     applyAwarenessUpdate(awareness, decoded, "test");
     expect(awareness.getStates().get(clientId)).toBeUndefined();
+  });
+
+  /** What a newcomer is told about who is here: client id -> state. */
+  async function presentOn(boardId: string): Promise<Map<number, Record<string, unknown>>> {
+    const socket = ioClient(`http://localhost:${port}`, {
+      path: "/socket.io",
+      auth: { boardId },
+      transports: ["websocket"],
+      forceNew: true,
+    });
+    open.push(socket);
+
+    const { applyAwarenessUpdate } = await import("y-protocols/awareness");
+    const awareness = new Awareness(new Y.Doc());
+    awareness.setLocalState(null);
+    socket.on(EVENTS.AWARENESS_UPDATE, (bytes: ArrayBuffer) => {
+      applyAwarenessUpdate(awareness, new Uint8Array(bytes), "test");
+    });
+    await once(socket, EVENTS.BOARD_JOINED);
+    // The present list follows board:joined; give it a moment to arrive.
+    await new Promise((r) => setTimeout(r, 150));
+    socket.close();
+    return awareness.getStates() as Map<number, Record<string, unknown>>;
+  }
+
+  /** An update about someone else's client id — what a forger would send. */
+  function forged(clientId: number, state: Record<string, unknown> | null): Uint8Array {
+    const doc = new Y.Doc();
+    doc.clientID = clientId;
+    const awareness = new Awareness(doc);
+    // Well past the real client's clock, so it would win if it were applied.
+    for (let i = 0; i < 5; i++) awareness.setLocalState({ step: i });
+    awareness.setLocalState(state);
+    return encodeAwarenessUpdate(awareness, [clientId]);
+  }
+
+  const settle = () => new Promise((r) => setTimeout(r, 200));
+
+  it("ignores an update about somebody else's cursor", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+    const b = await connect(boardId);
+
+    const { bytes, clientId } = awarenessUpdate({ cursor: { x: 1, y: 2 } });
+    a.emit(EVENTS.AWARENESS_UPDATE, bytes);
+    await settle();
+
+    b.emit(EVENTS.AWARENESS_UPDATE, forged(clientId, { cursor: { x: 999, y: 999 } }));
+    await settle();
+
+    expect((await presentOn(boardId)).get(clientId)).toEqual({ cursor: { x: 1, y: 2 } });
+  });
+
+  it("ignores a retraction of somebody else's cursor", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+    const b = await connect(boardId);
+
+    const { bytes, clientId } = awarenessUpdate({ cursor: { x: 1, y: 2 } });
+    a.emit(EVENTS.AWARENESS_UPDATE, bytes);
+    await settle();
+
+    b.emit(EVENTS.AWARENESS_UPDATE, forged(clientId, null));
+    await settle();
+
+    expect((await presentOn(boardId)).get(clientId)).toEqual({ cursor: { x: 1, y: 2 } });
+  });
+
+  // A client relays y-protocols' own retraction of a peer it hasn't heard
+  // from. If that claimed the peer's id, the peer couldn't come back.
+  it("does not let a retraction take a client id nobody holds", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+    const b = await connect(boardId);
+    const { clientId } = awarenessUpdate({});
+
+    b.emit(EVENTS.AWARENESS_UPDATE, forged(clientId, null));
+    await settle();
+    a.emit(EVENTS.AWARENESS_UPDATE, forged(clientId, { cursor: { x: 1, y: 2 } }));
+    await settle();
+
+    expect((await presentOn(boardId)).get(clientId)).toEqual({ cursor: { x: 1, y: 2 } });
+  });
+
+  it("stops one socket introducing a crowd", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+
+    for (let i = 0; i < MAX_CLIENT_IDS_PER_SOCKET + 5; i++) {
+      a.emit(EVENTS.AWARENESS_UPDATE, awarenessUpdate({ cursor: { x: i, y: i } }).bytes);
+    }
+    await settle();
+
+    expect((await presentOn(boardId)).size).toBe(MAX_CLIENT_IDS_PER_SOCKET);
+  });
+
+  // A reconnect is a new socket, and it usually arrives before the server has
+  // noticed the old one is dead.
+  it("lets a client's next socket carry on with its cursor, and keeps it when the old one drops", async () => {
+    const boardId = await makeBoard();
+    const presenceKey = "a-presence-key-of-enough-length";
+    const old = await connect(boardId, "A", { presenceKey });
+    const next = await connect(boardId, "A", { presenceKey });
+
+    const { bytes, clientId } = awarenessUpdate({ cursor: { x: 1, y: 2 } });
+    old.emit(EVENTS.AWARENESS_UPDATE, bytes);
+    await settle();
+    next.emit(EVENTS.AWARENESS_UPDATE, forged(clientId, { cursor: { x: 3, y: 4 } }));
+    await settle();
+    expect((await presentOn(boardId)).get(clientId)).toEqual({ cursor: { x: 3, y: 4 } });
+
+    old.disconnect();
+    await settle();
+    expect((await presentOn(boardId)).get(clientId)).toEqual({ cursor: { x: 3, y: 4 } });
+
+    next.disconnect();
+    await settle();
+    expect((await presentOn(boardId)).has(clientId)).toBe(false);
+  });
+});
+
+describe("limits", () => {
+  /** Everything a fresh client would be sent. */
+  async function boardAsSeenBy(socket: ClientSocket): Promise<Y.Doc> {
+    const doc = new Y.Doc();
+    const catchUp = once<ArrayBuffer>(socket, EVENTS.SYNC_UPDATE);
+    socket.emit(EVENTS.SYNC_STEP, Y.encodeStateVector(doc));
+    Y.applyUpdate(doc, new Uint8Array(await catchUp));
+    return doc;
+  }
+
+  // Dropping an update leaves a hole that holds back everything after it, so
+  // the server follows a drop by asking the client for what it is missing.
+  it("drops updates that arrive too fast, then asks for them again", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+
+    const doc = new Y.Doc();
+    doc.on("update", (update: Uint8Array) => a.emit(EVENTS.SYNC_UPDATE, update));
+    // What board-session.ts does with the server's state vector.
+    let asked = 0;
+    a.on(EVENTS.SYNC_STEP, (vector: ArrayBuffer) => {
+      asked++;
+      a.emit(EVENTS.SYNC_UPDATE, Y.encodeStateAsUpdate(doc, new Uint8Array(vector)));
+    });
+
+    const sent = SOCKET_RULES.syncUpdate.capacity + 100;
+    for (let i = 0; i < sent; i++) doc.getMap("strokes").set(`s${i}`, i);
+
+    await expect.poll(() => asked, { timeout: 4000 }).toBeGreaterThan(0);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const b = await connect(boardId);
+    expect((await boardAsSeenBy(b)).getMap("strokes").size).toBe(sent);
+  });
+
+  it("answers only so many state vectors", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+
+    let answers = 0;
+    a.on(EVENTS.SYNC_UPDATE, () => answers++);
+    const vector = Y.encodeStateVector(new Y.Doc());
+    for (let i = 0; i < SOCKET_RULES.syncStep.capacity + 20; i++) a.emit(EVENTS.SYNC_STEP, vector);
+    await new Promise((r) => setTimeout(r, 400));
+
+    expect(answers).toBe(SOCKET_RULES.syncStep.capacity);
+  });
+
+  it("refuses to grow a full board, and still lets it be cleared", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+
+    const errors: Array<{ message: string }> = [];
+    a.on(EVENTS.ERROR, (err: { message: string }) => errors.push(err));
+
+    const doc = new Y.Doc();
+    doc.on("update", (update: Uint8Array) => a.emit(EVENTS.SYNC_UPDATE, update));
+
+    // Each just under the per-update ceiling; together, past the board's.
+    const chunk = "x".repeat(900_000);
+    const chunks = Math.ceil(MAX_BOARD_BYTES / chunk.length);
+    for (let i = 0; i < chunks; i++) doc.getMap("notes").set(`n${i}`, chunk);
+    await expect.poll(() => errors.length, { timeout: 4000 }).toBe(1);
+    expect(errors[0]!.message).toBe("This board is full.");
+
+    const b = await connect(boardId);
+    const full = await boardAsSeenBy(b);
+    expect(full.getMap("notes").size).toBe(chunks - 1);
+
+    // A deletion is the one thing a full board must still accept.
+    doc.getMap("notes").delete("n0");
+    await new Promise((r) => setTimeout(r, 300));
+
+    const c = await connect(boardId);
+    expect((await boardAsSeenBy(c)).getMap("notes").has("n0")).toBe(false);
+    expect(errors).toHaveLength(1);
   });
 });

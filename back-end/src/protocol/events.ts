@@ -5,10 +5,13 @@
 //
 // The board is chosen in the **handshake**, not by an event:
 //
-//   io(url, { auth: { boardId, name }, withCredentials: true })
+//   io(url, { auth: { boardId, name, presenceKey }, withCredentials: true })
 //
 // so a socket belongs to exactly one board for its lifetime and cannot hop
-// between rooms. The session cookie rides along on the handshake, which is what
+// between rooms. `presenceKey` is optional: a random string of 16 to 64
+// characters that a client keeps for its session and sends nowhere else. A
+// socket may only send awareness for its own client ids, and the key is what
+// lets a reconnect, which is a new socket, carry on with the same one. The session cookie rides along on the handshake, which is what
 // gives a cursor a real name. A handshake that names a missing or expired board
 // is refused with connect_error carrying one of: no_board, board_not_found,
 // board_expired, handshake_failed.
@@ -35,6 +38,11 @@
 //                                                server-issued retractions when
 //                                                someone disconnects
 //   error:named       ({ message, next })        something went wrong; next step named
+//
+// Each socket is rate limited (realtime/limits.ts). An awareness update over
+// the limit is dropped. A sync:update over it is dropped too, and about a
+// second later the server sends sync:step again, which the client answers as
+// it does on join — so nothing it drew is lost, only late.
 
 export const EVENTS = {
   BOARD_JOINED: "board:joined",

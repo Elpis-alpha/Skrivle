@@ -12,7 +12,8 @@
 // what actually differs, so rejoining a large board is cheap.
 import type { Server as IOServer, Socket } from "socket.io";
 import * as Y from "yjs";
-import { markDirty } from "./doc-manager.js";
+import { addBytes, hasRoom, markDirty } from "./doc-manager.js";
+import { appendUpdate } from "./update-log.js";
 import { EVENTS } from "../protocol/events.js";
 
 /**
@@ -56,6 +57,9 @@ export function sendMissingUpdates(socket: Socket, doc: Y.Doc, stateVector: Uint
   socket.emit(EVENTS.SYNC_UPDATE, diff);
 }
 
+/** Why an update was turned away, or that it wasn't. */
+export type ApplyResult = "applied" | "too_large" | "board_full" | "invalid";
+
 /**
  * Apply a client's update and fan it out to the rest of the board.
  *
@@ -64,7 +68,8 @@ export function sendMissingUpdates(socket: Socket, doc: Y.Doc, stateVector: Uint
  * converges on the same document either way, and forwarding avoids re-encoding
  * the delta once per recipient.
  *
- * Returns false when the update was rejected.
+ * A full board still takes an update that only deletes. Refusing those would
+ * leave nobody able to make room.
  */
 export function applyClientUpdate(
   io: IOServer,
@@ -72,20 +77,29 @@ export function applyClientUpdate(
   doc: Y.Doc,
   update: Uint8Array,
   from: Socket,
-): boolean {
-  if (update.byteLength > MAX_UPDATE_BYTES) return false;
+): ApplyResult {
+  if (update.byteLength > MAX_UPDATE_BYTES) return "too_large";
 
   try {
+    if (!hasRoom(boardId, update.byteLength) && addsContent(update)) return "board_full";
+
     // The origin tags this change as coming from `from`, which keeps the
     // server's own update handlers from treating it as a local edit.
     Y.applyUpdate(doc, update, from.id);
   } catch {
-    return false;
+    return "invalid";
   }
 
+  addBytes(boardId, update.byteLength);
   markDirty(boardId);
+  appendUpdate(boardId, update);
   io.to(roomFor(boardId)).except(from.id).emit(EVENTS.SYNC_UPDATE, update);
-  return true;
+  return "applied";
+}
+
+/** Whether an update carries anything besides deletions. Throws on malformed bytes. */
+function addsContent(update: Uint8Array): boolean {
+  return Y.decodeUpdate(update).structs.length > 0;
 }
 
 /** Socket.IO room name for a board. */

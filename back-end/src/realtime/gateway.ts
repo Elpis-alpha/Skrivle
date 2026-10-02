@@ -17,10 +17,18 @@ import {
   encodeAllStates,
   encodeStates,
   releaseAwareness,
-  retractClients,
+  releaseClients,
   SERVER_ORIGIN,
 } from "./awareness.js";
 import { acquireDoc, releaseDoc, socketCount, trackSocket, untrackSocket } from "./doc-manager.js";
+import {
+  MAX_AWARENESS_BYTES,
+  newBucket,
+  RESYNC_AFTER_MS,
+  SOCKET_RULES,
+  take,
+  type Bucket,
+} from "./limits.js";
 import { persistSnapshot } from "./snapshot-writer.js";
 import {
   applyClientUpdate,
@@ -43,12 +51,17 @@ export { roomFor };
 
 /** Per-socket state, established during the handshake. */
 type SocketState = {
+  /** The socket's own id, which is what awareness knows it by. */
+  id: string;
   boardId: string;
   userId: string | null;
   displayName: string;
   joinOrder: number;
-  /** Awareness client ids this socket introduced, retracted on disconnect. */
+  /** What lets this client's next socket carry on as the same cursor. */
+  presenceKey: string;
+  /** Awareness client ids this socket speaks for, released on disconnect. */
   awarenessClients: Set<number>;
+  buckets: { syncUpdate: Bucket; syncStep: Bucket; awareness: Bucket };
 };
 
 const state = new WeakMap<Socket, SocketState>();
@@ -108,11 +121,18 @@ export function attachGateway(httpServer: HttpServer): IOServer {
         : "";
 
       state.set(socket, {
+        id: socket.id,
         boardId: board.id,
         userId: user?.id ?? null,
         displayName: user?.name ?? guestName ?? "Guest",
         joinOrder: nextJoinOrder(board.id),
+        presenceKey: presenceKeyFrom(socket),
         awarenessClients: new Set(),
+        buckets: {
+          syncUpdate: newBucket(SOCKET_RULES.syncUpdate),
+          syncStep: newBucket(SOCKET_RULES.syncStep),
+          awareness: newBucket(SOCKET_RULES.awareness),
+        },
       });
       next();
     } catch (err) {
@@ -180,17 +200,40 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
 
     // --- document sync ---
 
+    // An update dropped for arriving too fast leaves a hole: Yjs holds back
+    // everything that client sends afterwards until the missing piece turns
+    // up. So a drop is followed, once the bucket has refilled, by the server
+    // advertising what it has — which the client answers with all of what it
+    // lacks, the same exchange as on join.
+    let resync: NodeJS.Timeout | null = null;
+    const resyncSoon = () => {
+      if (resync) return;
+      resync = setTimeout(() => {
+        resync = null;
+        sendInitialSync(socket, doc);
+      }, RESYNC_AFTER_MS);
+    };
+
     socket.on(EVENTS.SYNC_STEP, (payload: unknown) => {
       const vector = toBytes(payload);
       if (!vector) return;
+      if (!take(own.buckets.syncStep, SOCKET_RULES.syncStep)) return;
       sendMissingUpdates(socket, doc, vector);
     });
 
     socket.on(EVENTS.SYNC_UPDATE, (payload: unknown) => {
       const update = toBytes(payload);
       if (!update) return;
-      if (!applyClientUpdate(io, boardId, doc, update, socket)) {
+      if (!take(own.buckets.syncUpdate, SOCKET_RULES.syncUpdate)) {
+        resyncSoon();
+        return;
+      }
+
+      const result = applyClientUpdate(io, boardId, doc, update, socket);
+      if (result === "too_large") {
         named(socket, "That change was too large to apply.", "Try again with a smaller selection.");
+      } else if (result === "board_full") {
+        named(socket, "This board is full.", "Delete something to make room, or start a new board.");
       }
     });
 
@@ -198,15 +241,18 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
 
     socket.on(EVENTS.AWARENESS_UPDATE, (payload: unknown) => {
       const update = toBytes(payload);
-      if (!update) return;
+      if (!update || update.byteLength > MAX_AWARENESS_BYTES) return;
+      // Dropped outright when over the limit: the next one carries the whole
+      // state again, so there is nothing to catch up on.
+      if (!take(own.buckets.awareness, SOCKET_RULES.awareness)) return;
 
+      let allowed: Uint8Array | null;
       try {
-        const introduced = applyClientAwareness(awareness, update, socket.id);
-        for (const clientId of introduced) own.awarenessClients.add(clientId);
+        allowed = applyClientAwareness(boardId, update, own);
       } catch {
         return;
       }
-      socket.to(roomFor(boardId)).emit(EVENTS.AWARENESS_UPDATE, update);
+      if (allowed) socket.to(roomFor(boardId)).emit(EVENTS.AWARENESS_UPDATE, allowed);
     });
 
     // Retractions the server itself makes (a peer disconnecting) still have to
@@ -224,10 +270,11 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
 
     socket.on("disconnect", () => {
       try {
+        if (resync) clearTimeout(resync);
         awareness.off("update", onAwarenessChange);
         // The fix for ghost cursors: the server retracts what this socket
         // brought, whether or not the client managed to say goodbye.
-        retractClients(awareness, [...own.awarenessClients]);
+        releaseClients(boardId, own);
 
         const roomEmpty = untrackSocket(boardId, socket.id);
         if (roomEmpty) void releaseBoard(boardId);
@@ -271,6 +318,15 @@ async function releaseBoard(boardId: string): Promise<void> {
 /** STYLE_GUIDE §10.3 — what happened, and the next step. */
 function named(socket: Socket, message: string, next: string): void {
   socket.emit(EVENTS.ERROR, { message, next });
+}
+
+/**
+ * The client's presence key, or the socket's own id for a client that sends
+ * none — unique to this socket, so its client ids are simply never shared.
+ */
+function presenceKeyFrom(socket: Socket): string {
+  const raw = socket.handshake.auth?.presenceKey;
+  return typeof raw === "string" && raw.length >= 16 && raw.length <= 64 ? raw : socket.id;
 }
 
 function sessionCookieFrom(socket: Socket): string | undefined {

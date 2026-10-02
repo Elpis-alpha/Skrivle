@@ -16,6 +16,11 @@ const { prisma } = await import("../db/prisma.js");
 const { createBoard } = await import("../boards/service.js");
 const { acquireDoc, resetRegistry } = await import("../realtime/doc-manager.js");
 const { publicIdFor } = await import("../media/cloudinary.js");
+const { useRedis } = await import("../test/redis-harness.js");
+
+// Loading a board reads its update log, and the sweep drops the logs of the
+// boards it deletes.
+useRedis();
 
 beforeEach(async () => {
   deleted.length = 0;
