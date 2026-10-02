@@ -155,9 +155,11 @@ Hosted under `elpis.cc`, split by tier:
 
 - The front-end took the apex and `coming-soon/` moved to `soon.` on 2026-09-06;
   the API tier followed, and all three domains are live.
-- Back-end Compose stack: `back-end` + `redis` (Postgres is external; Nginx is
-  the VPS host's, not a container). A profile-gated `migrate` service shares the
-  image for ad-hoc migration runs.
+- Back-end Compose stack: `back-end` + `redis` (Postgres is external). The API
+  publishes no host port: it joins the external `overseer-edge` Docker network,
+  shared with the VPS's other containers, and the reverse proxy reaches it as
+  `skrivle-api:4000` there. Redis stays on the stack's default network. A
+  profile-gated `migrate` service shares the image for ad-hoc migration runs.
 - **Migrations apply on container start.** `back-end/docker-entrypoint.sh` runs
   `prisma migrate deploy` before the server process; repeated failure crash-loops
   the container rather than serving a stale schema — safe because there is

@@ -12,10 +12,12 @@ services:
     build: .
     image: skrivle-back-end
     container_name: skrivle-api
-    # Published on the Docker bridge gateway, not 0.0.0.0 — the host's Nginx
-    # reverse-proxies to it and nothing off-box should reach the Node port.
-    ports:
-      - "172.17.0.1:5002:4000"
+    # No published port. The reverse proxy reaches the Node port (4000) as
+    # `skrivle-api:4000` over the shared overseer-edge network; the default
+    # network stays attached so this container can still reach Redis.
+    networks:
+      - default
+      - overseer-edge
     env_file:
       - .env
     environment:
@@ -74,3 +76,8 @@ services:
 volumes:
   redis-data:
     name: skrivle-redis-data
+
+# Created outside this stack; other containers on the VPS share it.
+networks:
+  overseer-edge:
+    external: true
