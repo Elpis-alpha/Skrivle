@@ -54,8 +54,8 @@ board. Front-end only — no doc schema or wire-format changes.
 
 From a review of the live board (2026-09-25), in the order they should be done:
 live bugs first, then the safety net that would have caught them, editing
-basics, the style guide's unkept promises, hardening, and finally features past
-the v1 scope.
+basics, the style guide's unkept promises, and hardening. The features past the
+v1 scope that the same review proposed are Phase 1.7.
 
 **Bugs**
 
@@ -114,7 +114,9 @@ the v1 scope.
 - [ ] An update log between snapshots, so a crash loses nothing rather than up
   to 30s
 
-**Past v1 scope**
+## Phase 1.7 — Past the v1 scope
+
+Proposed by the same review, and not being worked on now.
 
 - [ ] Export to PNG / SVG, reusing the thumbnail renderer at full resolution
 - [ ] Follow a collaborator's viewport (shared through awareness)
@@ -135,4 +137,4 @@ Not started; no timeline. v1 (Phase 0 + 1) is complete and live.
 ## Deferred / out of scope for v1
 
 Comments, chat, reactions, templates. Export and view-only links, deferred
-until now, are proposed in Phase 1.6.
+until now, are proposed in Phase 1.7.
