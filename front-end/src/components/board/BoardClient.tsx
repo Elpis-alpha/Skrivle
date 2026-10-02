@@ -23,6 +23,7 @@ import { useAuthLanding } from "@/lib/auth/landing";
 import { claimIfPossible } from "@/lib/board/claim";
 import { forgetCreatorToken } from "@/lib/board/creator-tokens";
 import { useResource } from "@/lib/hooks/useResource";
+import { forgetLocalCopies } from "@/lib/realtime/local-copy";
 import { useSession } from "@/lib/session/SessionProvider";
 
 export function BoardClient({ id }: { id: string }) {
@@ -48,11 +49,12 @@ export function BoardClient({ id }: { id: string }) {
       .finally(clearLanding);
   }, [claimId, user, reload, clearLanding]);
 
-  // An expired board's token can't buy anything; stop carrying it around.
+  // An expired board's token can't buy anything; stop carrying it around. And
+  // this browser's copy of a board that is gone has nowhere left to sync to.
   useEffect(() => {
-    if (board.status === "error" && board.error.status === 410) {
-      forgetCreatorToken(id);
-    }
+    if (board.status !== "error") return;
+    if (board.error.status === 410) forgetCreatorToken(id);
+    if (board.error.status === 410 || board.error.status === 404) forgetLocalCopies(id);
   }, [board.status, board.error, id]);
 
   if (board.status === "loading" || board.status === "idle") {

@@ -22,6 +22,7 @@ const BOARD = {
   title: "",
   isEphemeral: true,
   expiresAt: "2099-01-01T00:00:00.000Z",
+  createdAt: "2099-01-01T00:00:00.000Z",
   updatedAt: "2099-01-01T00:00:00.000Z",
   hasOwner: false,
   thumbnailUrl: null,

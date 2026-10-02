@@ -25,6 +25,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "socket.io-client": "^4.8.3",
+    "y-indexeddb": "^9.0.12",
     "y-protocols": "^1.0.7",
     "yjs": "^13.6.32"
   },
@@ -42,6 +43,7 @@
     "esbuild": "^0.27.7",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",

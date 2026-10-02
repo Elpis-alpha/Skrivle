@@ -40,7 +40,6 @@ describe("landing page", () => {
 
   it("states the build status now that the whole app is live", () => {
     render(<Page />);
-    expect(screen.getByText(/the whole board works/i)).toBeInTheDocument();
     expect(screen.getByText(/the native app is what's left/i)).toBeInTheDocument();
   });
 

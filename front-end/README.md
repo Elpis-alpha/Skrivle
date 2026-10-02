@@ -112,6 +112,7 @@ of truth and are wired in here:
 | --- | --- |
 | REST client (one `apiFetch`, hand-written types mirroring `openapi.yaml`) | [`src/lib/api/`](src/lib/api/) |
 | Yjs + Socket.IO session, framework-free, and its React binding | [`src/lib/realtime/`](src/lib/realtime/) |
+| The board's doc kept in IndexedDB, so unsynced work survives a reload | [`src/lib/realtime/local-copy.ts`](src/lib/realtime/local-copy.ts) |
 | Who you are (`GET /api/auth/me`, once, per product surface) | [`src/lib/session/`](src/lib/session/) |
 | The canvas's logic: tools and gestures, geometry, camera, clipboard, strokes; guest board tokens, claiming, expiry copy | [`src/lib/board/`](src/lib/board/) |
 | The board's UI: canvas layers, toolbar, share dialog, zoom control | [`src/components/board/`](src/components/board/) |

@@ -18,6 +18,7 @@ const BOARD: BoardWithRole = {
   title: "Sprint 42",
   isEphemeral: false,
   expiresAt: null,
+  createdAt: "2099-01-01T00:00:00.000Z",
   updatedAt: "2099-01-01T00:00:00.000Z",
   hasOwner: true,
   thumbnailUrl: null,

@@ -4,10 +4,12 @@
 //
 // The board is chosen in the HANDSHAKE, not by an event:
 //
-//   io(url, { auth: { boardId, name }, withCredentials: true })
+//   io(url, { auth: { boardId, name, presenceKey }, withCredentials: true })
 //
 // so a socket belongs to exactly one board for its lifetime and cannot hop
-// rooms. The session cookie rides the handshake, which is what gives a cursor a
+// rooms. `presenceKey` is a random string kept for the session and sent nowhere
+// else: a socket may only send awareness for its own client id, and the key is
+// what lets a reconnect, which is a new socket, carry on with the same one. The session cookie rides the handshake, which is what gives a cursor a
 // real name.
 //
 // Sync is the standard Yjs two-step exchange:
@@ -16,6 +18,10 @@
 //   client -> server   sync:update  everything the server is missing
 //   client -> server   sync:step    client's state vector
 //   server -> client   sync:update  everything the client is missing
+//
+// Each socket is rate limited. An awareness update over the limit is dropped; a
+// sync:update over it is dropped too, and about a second later the server
+// sends sync:step again, which is answered as it is on join.
 //
 // Payloads are raw binary. The server emits Uint8Array; the browser hands them
 // back as ArrayBuffer, so every inbound payload goes through toBytes().

@@ -49,6 +49,9 @@ import { EVENTS } from "../protocol/events.js";
 
 export { roomFor };
 
+/** The least time between two "this board is full" notices to one socket. */
+const FULL_NOTICE_MS = 10_000;
+
 /** Per-socket state, established during the handshake. */
 type SocketState = {
   /** The socket's own id, which is what awareness knows it by. */
@@ -214,6 +217,8 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
       }, RESYNC_AFTER_MS);
     };
 
+    let toldFull = 0;
+
     socket.on(EVENTS.SYNC_STEP, (payload: unknown) => {
       const vector = toBytes(payload);
       if (!vector) return;
@@ -232,7 +237,10 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
       const result = applyClientUpdate(io, boardId, doc, update, socket);
       if (result === "too_large") {
         named(socket, "That change was too large to apply.", "Try again with a smaller selection.");
-      } else if (result === "board_full") {
+      } else if (result === "board_full" && Date.now() - toldFull >= FULL_NOTICE_MS) {
+        // Once in a while, not per update: a pen stroke on a full board is
+        // twenty refusals a second, and each notice is a toast to dismiss.
+        toldFull = Date.now();
         named(socket, "This board is full.", "Delete something to make room, or start a new board.");
       }
     });

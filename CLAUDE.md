@@ -80,9 +80,14 @@ field and are outlined in their cursor hue. Copy, paste and duplicate go through
 every element field by field. Pen ink is a filled, tapered outline
 (perfect-freehand) at constant weight — speed-simulated pressure was tried and
 dropped, because `simplify()` on release changed a finished stroke's weight by
-up to half. None of it changed the doc schema. Next is Phase 1.6, the follow-ups
-from a review of the live board, listed in the order to do them; then Phase 2,
-the native app — see [docs/ROADMAP.md](docs/ROADMAP.md).
+up to half. None of it changed the doc schema.
+
+**Phase 1.6, the follow-ups from a review of the live board, is done**, ending
+with hardening: per-socket limits (`back-end/src/realtime/limits.ts`), a Redis
+update log between snapshots (`update-log.ts`), and the board's doc kept in
+IndexedDB (`front-end/src/lib/realtime/local-copy.ts`). Phase 1.7 lists the
+features past the v1 scope and is not being worked on; then Phase 2, the native
+app — see [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Five things worth knowing before touching this seam:
 
@@ -112,6 +117,20 @@ Five things worth knowing before touching this seam:
   box the doc knows.
 - **React registers `wheel` as a passive listener,** so `preventDefault()` in an
   `onWheel` prop does nothing. Zoom is a native listener with `passive: false`.
+
+Three about hardening:
+
+- **A dropped canvas update has to be asked for again.** Yjs holds back
+  everything a client sends after a missing update, so the gateway follows a
+  rate-limit drop by re-sending its state vector. Don't add a path that drops a
+  `sync:update` silently.
+- **The update log is trimmed by a seal, never by count,** and the seal is
+  pushed in the same tick the doc is encoded with nothing awaited between.
+  That ordering is the whole guarantee.
+- **The client doesn't emit while the socket is down.** Socket.IO would queue
+  every edit and flush them into the rate limit on reconnect; the reconnect's
+  sync sends the same work as one update. The local copy is keyed by board id
+  and `createdAt`, because ids are reused.
 
 Three more, about the tiers:
 

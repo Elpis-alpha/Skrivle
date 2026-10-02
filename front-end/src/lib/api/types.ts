@@ -37,6 +37,8 @@ export type Board = {
   isEphemeral: boolean;
   /** ISO string, or null for a board that never expires. */
   expiresAt: string | null;
+  /** Never changes, so it tells this board from an earlier one with the same id. */
+  createdAt: string;
   updatedAt: string;
   hasOwner: boolean;
   thumbnailUrl: string | null;

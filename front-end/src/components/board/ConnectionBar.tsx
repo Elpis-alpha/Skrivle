@@ -9,7 +9,14 @@ import { useEffect, useRef } from "react";
 import { useToast } from "@/components/ui/Toast";
 import type { ConnectionStatus } from "@/lib/realtime/board-session";
 
-export function ConnectionBar({ status }: { status: ConnectionStatus }) {
+export function ConnectionBar({
+  status,
+  savedLocally,
+}: {
+  status: ConnectionStatus;
+  /** Whether changes are being kept in this browser (lib/realtime/local-copy.ts). */
+  savedLocally: boolean;
+}) {
   const toast = useToast();
   const last = useRef(status);
 
@@ -24,14 +31,17 @@ export function ConnectionBar({ status }: { status: ConnectionStatus }) {
 
   if (status !== "reconnecting") return null;
 
-  // Unsynced work lives in this tab's memory until the socket is back, so the
-  // bar says to keep the tab rather than calling it saved.
+  // Only called saved where it is. A browser that can't keep a copy holds
+  // unsynced work in this tab's memory and nowhere else, so there the bar says
+  // to keep the tab instead.
   return (
     <div
       role="status"
       className="shrink-0 bg-warning-subtle px-4 py-1 text-2xs font-medium text-warning-strong"
     >
-      Reconnecting… your changes will sync when you&apos;re back, so keep this tab open.
+      {savedLocally
+        ? "Reconnecting… your changes are saved on this device and will sync when you're back."
+        : "Reconnecting… your changes will sync when you're back, so keep this tab open."}
     </div>
   );
 }

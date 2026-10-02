@@ -106,13 +106,17 @@ v1 scope that the same review proposed are Phase 1.7.
 
 **Hardening**
 
-- [ ] Socket limits: a per-socket token bucket on sync and awareness updates, a
-  cap on a board's encoded size, and awareness updates limited to the socket's
-  own client ids
-- [ ] Offline persistence (`y-indexeddb`), so a reload while offline keeps
-  unsynced work
-- [ ] An update log between snapshots, so a crash loses nothing rather than up
-  to 30s
+- [x] Socket limits: a per-socket token bucket on sync and awareness updates, a
+  4 MB cap on a board's encoded size, and awareness updates limited to the
+  socket's own client ids. A canvas update dropped by the limit is asked for
+  again, so it arrives late rather than never; a full board still takes
+  deletions
+- [x] Offline persistence (`y-indexeddb`): what you draw while disconnected
+  survives a reload and syncs when you're back, and the reconnect bar says it's
+  saved on this device. The page itself still needs the network to load
+- [x] An update log between snapshots, in Redis, so a crash loses nothing that
+  was accepted rather than up to 30s. Snapshot writes for a board no longer
+  overlap
 
 ## Phase 1.7 — Past the v1 scope
 

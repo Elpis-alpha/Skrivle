@@ -4,9 +4,9 @@ import type { ConnectionStatus } from "@/lib/realtime/board-session";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConnectionBar } from "./ConnectionBar";
 
-const bar = (status: ConnectionStatus) => (
+const bar = (status: ConnectionStatus, savedLocally = true) => (
   <ToastProvider>
-    <ConnectionBar status={status} />
+    <ConnectionBar status={status} savedLocally={savedLocally} />
   </ToastProvider>
 );
 
@@ -16,9 +16,15 @@ describe("ConnectionBar", () => {
     expect(screen.getByText(/Reconnecting…/)).toBeInTheDocument();
   });
 
-  // Until offline persistence lands, unsynced work lives only in this tab.
+  it("says the work is saved on this device when it is", () => {
+    render(bar("reconnecting", true));
+    expect(screen.getByText(/saved on this device/)).toBeInTheDocument();
+    expect(screen.queryByText(/keep this tab open/)).toBeNull();
+  });
+
+  // A browser that can't keep a copy holds unsynced work only in the tab.
   it("doesn't claim the work is saved anywhere it isn't", () => {
-    render(bar("reconnecting"));
+    render(bar("reconnecting", false));
     expect(screen.queryByText(/saved/)).toBeNull();
     expect(screen.getByText(/keep this tab open/)).toBeInTheDocument();
   });

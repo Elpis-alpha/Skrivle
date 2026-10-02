@@ -21,6 +21,7 @@ export type BoardDoc = BoardSessionState & {
 const IDLE: BoardDoc = {
   status: "connecting",
   hydrated: false,
+  savedLocally: false,
   refusal: null,
   self: null,
   peers: [],
@@ -73,7 +74,12 @@ function createSessionHolder() {
     },
     getSnapshot: () => snapshot,
     getServerSnapshot: () => IDLE,
-    open(options: { boardId: string; name: string; avatarUrl: string | null }) {
+    open(options: {
+      boardId: string;
+      name: string;
+      avatarUrl: string | null;
+      createdAt: string | null;
+    }) {
       session?.destroy();
       session = createBoardSession(options);
       session.subscribe(refresh);
@@ -95,22 +101,26 @@ function createSessionHolder() {
  * @param boardId null while the board's metadata is still loading, or when it
  * turned out not to be joinable — the socket is never opened in that case.
  * @param name must be non-empty. See lib/board/guest-name.ts.
+ * @param createdAt the board's, so this browser's copy of it is never mistaken
+ * for a later board with the same id. See local-copy.ts.
  */
 export function useBoardDoc({
   boardId,
   name,
   avatarUrl = null,
+  createdAt = null,
 }: {
   boardId: string | null;
   name: string;
   avatarUrl?: string | null;
+  createdAt?: string | null;
 }): BoardDoc {
   const [holder] = useState(createSessionHolder);
 
   useEffect(() => {
     if (!boardId) return;
 
-    holder.open({ boardId, name, avatarUrl });
+    holder.open({ boardId, name, avatarUrl, createdAt });
 
     // StrictMode mounts twice in dev. The teardown is complete, and the next
     // open builds a brand-new Y.Doc — hence a new clientID — which sidesteps
@@ -119,7 +129,7 @@ export function useBoardDoc({
     // your peer-visible colour advances by one in dev. Don't "optimise" this by
     // reusing the doc across mounts; that reintroduces the race.
     return () => holder.close();
-  }, [holder, boardId, name, avatarUrl]);
+  }, [holder, boardId, name, avatarUrl, createdAt]);
 
   const state = useSyncExternalStore(
     holder.subscribe,

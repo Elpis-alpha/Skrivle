@@ -128,7 +128,7 @@ components:
 
     Board:
       type: object
-      required: [id, title, isEphemeral, expiresAt, updatedAt, hasOwner, thumbnailUrl]
+      required: [id, title, isEphemeral, expiresAt, createdAt, updatedAt, hasOwner, thumbnailUrl]
       properties:
         id:
           type: string
@@ -144,6 +144,12 @@ components:
           type: [string, "null"]
           format: date-time
           description: When a guest board expires. Null once claimed.
+        createdAt:
+          type: string
+          format: date-time
+          description: >-
+            Never changes. Ids are reused once a board is deleted or expires, so
+            this is what tells a board from an earlier one with the same id.
         updatedAt:
           type: string
           format: date-time

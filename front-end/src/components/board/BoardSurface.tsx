@@ -13,6 +13,7 @@ import { Share2 } from "lucide-react";
 import { AvatarCluster } from "@/components/board/AvatarCluster";
 import { CameraLayer } from "@/components/board/CameraLayer";
 import { ConnectionBar } from "@/components/board/ConnectionBar";
+import { useToast } from "@/components/ui/Toast";
 import { ElementLayer } from "@/components/board/ElementLayer";
 import { SelectionLayer } from "@/components/board/SelectionLayer";
 import { Toolbar } from "@/components/board/Toolbar";
@@ -110,12 +111,33 @@ export function BoardSurface({
     if (!isTypingTarget(event.target) && !isChrome(event.target)) event.preventDefault();
   }, []);
 
-  const { doc, status, hydrated, refusal, self, peers, setCursor, setSelection, setRole } =
-    useBoardDoc({
+  const {
+    doc,
+    status,
+    hydrated,
+    savedLocally,
+    refusal,
+    self,
+    peers,
+    lastError,
+    setCursor,
+    setSelection,
+    setRole,
+  } = useBoardDoc({
     boardId: board.id,
     name,
     avatarUrl: user?.avatarUrl ?? null,
+    // An API from before this field existed sends none, and then no copy is
+    // kept — the two tiers deploy separately.
+    createdAt: board.createdAt ?? null,
   });
+
+  // §10.21 — what the server turned away, and the next step: a change too
+  // large to apply, or a board that is full.
+  const toast = useToast();
+  useEffect(() => {
+    if (lastError) toast.show(`${lastError.message} ${lastError.next}`, { tone: "error" });
+  }, [lastError, toast]);
 
   const { undo, redo, stopCapturing } = useUndo(doc);
 
@@ -477,7 +499,7 @@ export function BoardSurface({
         guest={!user}
       />
 
-      <ConnectionBar status={status} />
+      <ConnectionBar status={status} savedLocally={savedLocally} />
 
       {/* §7 settle: the canvas starts flat and lifts once the doc is ready.
           This is the only non-user-triggered animation in the product.

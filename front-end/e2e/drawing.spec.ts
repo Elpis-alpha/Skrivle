@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
 
 // The drawing tools, over the real wire.
 //
@@ -667,5 +667,70 @@ test("two fingers pinch to zoom and drag to pan, and draw nothing", async ({ bro
     await expect(page.locator('[data-kind="path"]')).toHaveCount(1);
   } finally {
     await context.close();
+  }
+});
+
+// Offline persistence: the doc is also kept in IndexedDB, so work the server
+// never received outlives the tab that drew it.
+test("what you draw while disconnected survives a reload, and syncs once you're back", async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const other = await browser.newContext();
+
+  try {
+    const page = await context.newPage();
+
+    // Only the socket is cut. The page and the board's record still load, as
+    // they would with the API reachable and the realtime connection not.
+    let cut = false;
+    let upgraded = false;
+    const sockets: WebSocketRoute[] = [];
+    await context.routeWebSocket(/\/socket\.io\//, (ws) => {
+      if (cut) {
+        void ws.close();
+        return;
+      }
+      const server = ws.connectToServer();
+      ws.onMessage((message) => {
+        // Engine.IO's "5": the client committing to the WebSocket. Cut before
+        // then and it would simply stay on long-polling.
+        if (message === "5") upgraded = true;
+        server.send(message);
+      });
+      server.onMessage((message) => ws.send(message));
+      sockets.push(ws);
+    });
+    await context.route(/\/socket\.io\//, (route) => (cut ? route.abort() : route.continue()));
+
+    const url = await newBoard(page);
+    await expect.poll(() => upgraded).toBe(true);
+
+    cut = true;
+    for (const ws of sockets.splice(0)) await ws.close();
+    await expect(page.getByText(/saved on this device/)).toBeVisible();
+
+    await pickTool(page, "r");
+    await dragOut(page, [300, 200], [460, 300]);
+    await expect(elements(page)).toHaveCount(1);
+    // The write to IndexedDB is queued behind the edit; let it land.
+    await page.waitForTimeout(500);
+
+    // Still cut. The server has never heard of the rectangle, so only this
+    // browser's copy can put it back.
+    await page.reload();
+    await expect(elements(page)).toHaveCount(1);
+    await expect(page.getByText(/saved on this device/)).toBeVisible();
+
+    cut = false;
+    await expect(page.getByText(/Reconnecting…/)).toHaveCount(0, { timeout: 15_000 });
+
+    const theirs = await other.newPage();
+    await theirs.goto(url);
+    await settled(theirs);
+    await expect(elements(theirs)).toHaveCount(1, { timeout: 15_000 });
+  } finally {
+    await context.close();
+    await other.close();
   }
 });

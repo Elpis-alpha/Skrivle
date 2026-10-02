@@ -24,7 +24,8 @@ import {
   type NamedError,
 } from "./events";
 import { toBytes } from "./bytes";
-import { claimRootTypes } from "./doc-schema";
+import { claimRootTypes, elements } from "./doc-schema";
+import { openLocalCopy, type LocalCopy } from "./local-copy";
 import {
   colorByName,
   MAX_SHARED_SELECTION,
@@ -52,8 +53,14 @@ export type Self = {
 
 export type BoardSessionState = {
   status: ConnectionStatus;
-  /** True once the server's answer to our state vector has been applied (§7 settle). */
+  /**
+   * True once there is a board to show (§7 settle): the server's answer to our
+   * state vector has been applied, or this browser's own copy had something in
+   * it.
+   */
   hydrated: boolean;
+  /** True while changes are also being written to this browser's own copy. */
+  savedLocally: boolean;
   refusal: Refusal | null;
   self: Self | null;
   peers: PresencePeer[];
@@ -137,18 +144,43 @@ export type CreateBoardSessionOptions = {
   /** Must be non-empty — the server's "Guest" fallback never fires for "". */
   name: string;
   avatarUrl?: string | null;
+  /**
+   * When the board was created, which tells this board from an earlier one
+   * that had the same id. Without it no copy is kept in this browser.
+   */
+  createdAt?: string | null;
   /** Injectable so tests can drive a fake socket. */
-  connect?: (boardId: string, name: string) => Socket;
+  connect?: (boardId: string, name: string, presenceKey: string) => Socket;
+  /** Injectable so tests can stand in for IndexedDB. */
+  persist?: (doc: Y.Doc) => LocalCopy | null;
 };
 
-function defaultConnect(boardId: string, name: string): Socket {
+/**
+ * A secret for this session, sent in the handshake and nowhere else.
+ *
+ * The server lets a socket send awareness only for its own client id. A
+ * reconnect is a new socket for the same id, and usually arrives before the
+ * server has noticed the old one is dead; the key is what proves they are the
+ * same client, so the cursor carries on instead of being refused until the old
+ * socket times out.
+ */
+function newPresenceKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function defaultConnect(boardId: string, name: string, presenceKey: string): Socket {
   return io(API_URL, {
     path: "/socket.io",
     // The session cookie rides the handshake; without this the server sees a
     // guest even when you're signed in.
     withCredentials: true,
     // The board is chosen here, for the socket's whole lifetime.
-    auth: { boardId, name },
+    auth: { boardId, name, presenceKey },
     // Listeners must be attached before connecting — see below.
     autoConnect: false,
   });
@@ -157,8 +189,11 @@ function defaultConnect(boardId: string, name: string): Socket {
 export function createBoardSession(
   options: CreateBoardSessionOptions,
 ): BoardSession {
-  const { boardId, name, avatarUrl = null } = options;
+  const { boardId, name, avatarUrl = null, createdAt = null } = options;
   const connect = options.connect ?? defaultConnect;
+  const persist =
+    options.persist ??
+    ((target: Y.Doc) => (createdAt ? openLocalCopy(boardId, createdAt, target) : null));
 
   const doc = new Y.Doc();
   // Before any applyUpdate can define them for us.
@@ -178,6 +213,7 @@ export function createBoardSession(
   let state: BoardSessionState = {
     status: "connecting",
     hydrated: false,
+    savedLocally: false,
     refusal: null,
     self: null,
     peers: [],
@@ -200,13 +236,17 @@ export function createBoardSession(
     emit({ peers: peersFrom(awareness.getStates(), doc.clientID) });
   }
 
-  const socket = connect(boardId, name);
+  const socket = connect(boardId, name, newPresenceKey());
 
   // --- local -> wire --------------------------------------------------------
 
   const onDocUpdate = (update: Uint8Array, origin: unknown) => {
     // Never bounce back what the server just sent us.
     if (origin === REMOTE) return;
+    // Socket.IO would queue this and send it on reconnect: one frame per edit
+    // made offline, all at once, straight into the server's rate limit. The
+    // reconnect's own sync sends the same work as a single update.
+    if (!socket.connected) return;
     socket.emit(EVENTS.SYNC_UPDATE, update);
   };
   doc.on("update", onDocUpdate);
@@ -223,6 +263,9 @@ export function createBoardSession(
     if (origin === REMOTE) return;
     const changed = [...added, ...updated, ...removed];
     if (changed.length === 0) return;
+    // A cursor from before the connection dropped is news to nobody.
+    // board:joined republishes the whole local state once it's back.
+    if (!socket.connected) return;
     // This also relays y-protocols' own periodic re-announce, which is what
     // heals a peer that was wrongly retracted.
     socket.emit(
@@ -318,6 +361,20 @@ export function createBoardSession(
 
   socket.connect();
 
+  // --- this browser's copy --------------------------------------------------
+
+  // After the listeners above, so what the copy holds and the server doesn't
+  // goes out as a local change: through the sync if the socket isn't up yet,
+  // straight to it if it is.
+  const localCopy = persist(doc);
+  void localCopy?.loaded.then((kept) => {
+    if (destroyed || !kept) return;
+    emit({ savedLocally: true });
+    // There is already a board to show, so don't wait for the server to show
+    // it. An empty copy says nothing either way; that still waits.
+    if (elements(doc).size > 0) markHydrated();
+  });
+
   // --- local cursor ---------------------------------------------------------
 
   let pending: { x: number; y: number } | null = null;
@@ -409,6 +466,7 @@ export function createBoardSession(
 
     doc.off("update", onDocUpdate);
     awareness.off("update", onAwarenessUpdate);
+    localCopy?.destroy();
     socket.removeAllListeners();
     socket.disconnect();
     awareness.destroy();

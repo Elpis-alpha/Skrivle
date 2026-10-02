@@ -67,6 +67,17 @@ export default function PrivacyPage() {
           search engines, but the link itself is the whole of the access control.
         </p>
 
+        <h2>What stays in your browser</h2>
+        <p>
+          Your browser keeps a copy of each board you open, so that what you
+          draw while the connection is down is still there after a reload and
+          syncs once you are back. It also keeps the name you chose as a guest
+          and the tokens that let you extend or claim boards you made. All of
+          it stays on your device; a board&apos;s copy is deleted once the
+          board is gone or has not been opened for a month, and clearing your
+          browser&apos;s site data removes everything at once.
+        </p>
+
         <h2>What is not collected</h2>
         <ul>
           <li>No advertising trackers and no third-party analytics.</li>

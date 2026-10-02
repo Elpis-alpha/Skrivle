@@ -394,3 +394,181 @@ describe("createBoardSession", () => {
     expect(roles.get(odd)).toBeNull();
   });
 });
+
+describe("the presence key", () => {
+  it("is sent in the handshake, long enough for the server to accept", () => {
+    let key = "";
+    const s = createBoardSession({
+      boardId: "k3m9p",
+      name: "Ada",
+      connect: (_boardId, _name, presenceKey) => {
+        key = presenceKey;
+        return new FakeSocket() as unknown as Socket;
+      },
+    });
+    s.destroy();
+
+    // back-end/src/realtime/gateway.ts takes 16 to 64 characters.
+    expect(key.length).toBeGreaterThanOrEqual(16);
+    expect(key.length).toBeLessThanOrEqual(64);
+  });
+
+  it("is different for every session", () => {
+    const keys: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      createBoardSession({
+        boardId: "k3m9p",
+        name: "Ada",
+        connect: (_boardId, _name, presenceKey) => {
+          keys.push(presenceKey);
+          return new FakeSocket() as unknown as Socket;
+        },
+      }).destroy();
+    }
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+});
+
+describe("while the socket is down", () => {
+  // Socket.IO would queue each one and flush the lot on reconnect, straight
+  // into the server's rate limit. The reconnect's sync carries them instead.
+  it("sends no update per edit, and all of them in the sync that follows", () => {
+    socket.connected = false;
+    for (let i = 0; i < 50; i++) elementsOf(session.doc).set(`e${i}`, i);
+    expect(socket.countOf(EVENTS.SYNC_UPDATE)).toBe(0);
+
+    socket.connected = true;
+    const server = new Y.Doc();
+    socket.receive(EVENTS.SYNC_STEP, Y.encodeStateVector(server));
+
+    expect(socket.countOf(EVENTS.SYNC_UPDATE)).toBe(1);
+    Y.applyUpdate(server, socket.lastOf(EVENTS.SYNC_UPDATE) as Uint8Array);
+    expect(server.getMap("elements").size).toBe(50);
+  });
+
+  it("holds its cursor back, and announces itself again once joined", () => {
+    socket.connected = false;
+    const before = socket.countOf(EVENTS.AWARENESS_UPDATE);
+    session.setCursor({ x: 10, y: 10 });
+    expect(socket.countOf(EVENTS.AWARENESS_UPDATE)).toBe(before);
+
+    socket.connected = true;
+    socket.receive(EVENTS.BOARD_JOINED, JOINED);
+    expect(socket.countOf(EVENTS.AWARENESS_UPDATE)).toBeGreaterThan(before);
+  });
+});
+
+describe("this browser's copy", () => {
+  /** Stands in for IndexedDB: loads `stored` into the doc when told to. */
+  function fakeCopy(doc: Y.Doc, stored: Y.Doc | null) {
+    let finish!: (kept: boolean) => void;
+    const loaded = new Promise<boolean>((resolve) => (finish = resolve));
+    return {
+      loaded,
+      destroy: vi.fn(),
+      load() {
+        if (stored) Y.applyUpdate(doc, Y.encodeStateAsUpdate(stored), "local-copy");
+        finish(true);
+      },
+      fail() {
+        finish(false);
+      },
+    };
+  }
+
+  function startWith(stored: Y.Doc | null) {
+    session.destroy();
+    socket = new FakeSocket();
+    let handle!: ReturnType<typeof fakeCopy>;
+    session = createBoardSession({
+      boardId: "k3m9p",
+      name: "Ada",
+      connect: () => socket as unknown as Socket,
+      persist: (doc) => (handle = fakeCopy(doc, stored)),
+    });
+    return handle;
+  }
+
+  const drawn = () => {
+    const stored = new Y.Doc();
+    // The typed schema: an element is a Y.Map under `elements`.
+    stored.getMap("elements").set("note-1", new Y.Map());
+    return stored;
+  };
+
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it("shows a board it already has without waiting for the server", async () => {
+    const copy = startWith(drawn());
+    expect(session.getSnapshot().hydrated).toBe(false);
+
+    copy.load();
+    await flush();
+
+    expect(session.getSnapshot().hydrated).toBe(true);
+    expect(session.getSnapshot().savedLocally).toBe(true);
+  });
+
+  // An empty copy is what a first visit looks like; the board may well have
+  // content, so the empty-board hint must wait for the server.
+  it("still waits for the server when its copy is empty", async () => {
+    const copy = startWith(null);
+
+    copy.load();
+    await flush();
+
+    expect(session.getSnapshot().hydrated).toBe(false);
+    expect(session.getSnapshot().savedLocally).toBe(true);
+  });
+
+  it("doesn't say the work is saved here when the browser can't keep it", async () => {
+    const copy = startWith(null);
+
+    copy.fail();
+    await flush();
+
+    expect(session.getSnapshot().savedLocally).toBe(false);
+  });
+
+  it("sends what it has that the server doesn't, when it loads after the sync", async () => {
+    const copy = startWith(drawn());
+    socket.receive(EVENTS.BOARD_JOINED, JOINED);
+    socket.receive(EVENTS.SYNC_STEP, Y.encodeStateVector(new Y.Doc()));
+    const before = socket.countOf(EVENTS.SYNC_UPDATE);
+
+    copy.load();
+    await flush();
+
+    expect(socket.countOf(EVENTS.SYNC_UPDATE)).toBe(before + 1);
+    const server = new Y.Doc();
+    Y.applyUpdate(server, socket.lastOf(EVENTS.SYNC_UPDATE) as Uint8Array);
+    expect(server.getMap("elements").has("note-1")).toBe(true);
+  });
+
+  it("sends what it has in the sync, when it loads before the socket is up", async () => {
+    const copy = startWith(drawn());
+    socket.connected = false;
+
+    copy.load();
+    await flush();
+    expect(socket.countOf(EVENTS.SYNC_UPDATE)).toBe(0);
+
+    socket.connected = true;
+    const server = new Y.Doc();
+    socket.receive(EVENTS.SYNC_STEP, Y.encodeStateVector(server));
+    Y.applyUpdate(server, socket.lastOf(EVENTS.SYNC_UPDATE) as Uint8Array);
+    expect(server.getMap("elements").has("note-1")).toBe(true);
+  });
+
+  it("is closed with the session", () => {
+    const copy = startWith(null);
+    session.destroy();
+    expect(copy.destroy).toHaveBeenCalled();
+  });
+
+  it("keeps none without the board's creation time", () => {
+    // The default `persist`: no createdAt, so nothing to tell this board from
+    // an older one with its id.
+    expect(start().getSnapshot().savedLocally).toBe(false);
+  });
+});

@@ -52,6 +52,15 @@ nothing upstream rate-limits a socket. Peers therefore receive changes in 50ms
 steps, and each client eases a peer's moves and resizes over ~70ms, the same
 approach its cursor uses, so an element travels with the cursor dragging it.
 
+The client also keeps each board's doc in IndexedDB (`y-indexeddb`, behind
+`front-end/src/lib/realtime/local-copy.ts`), so work the server never received
+outlives the tab: the next time the board opens, the stored doc is loaded and
+whatever the server lacks goes up in the ordinary sync. It doesn't make a board
+open offline, since the page and the board's record still come over the network.
+The database is named for the board id *and* its `createdAt`, because ids are
+reused once a board is deleted or expires, and a stored copy of the old board
+would otherwise be merged into the new one for everybody on it.
+
 ### Persistence: snapshots, not rows
 
 The Yjs document is serialized to a binary blob and written to `board_docs`:

@@ -48,6 +48,7 @@ function publicBoard(board: {
   isEphemeral: boolean;
   expiresAt: Date | null;
   ownerId: string | null;
+  createdAt: Date;
   updatedAt: Date;
   thumbnailId: string | null;
 }) {
@@ -56,6 +57,7 @@ function publicBoard(board: {
     title: board.title,
     isEphemeral: board.isEphemeral,
     expiresAt: board.expiresAt,
+    createdAt: board.createdAt,
     updatedAt: board.updatedAt,
     hasOwner: board.ownerId !== null,
     thumbnailUrl: thumbnailUrl(board.thumbnailId),
