@@ -30,6 +30,7 @@ import {
   type Bucket,
 } from "./limits.js";
 import { persistSnapshot } from "./snapshot-writer.js";
+import { dropLogs } from "./update-log.js";
 import {
   applyClientUpdate,
   MAX_FRAME_BYTES,
@@ -49,8 +50,18 @@ import { EVENTS } from "../protocol/events.js";
 
 export { roomFor };
 
-/** The least time between two "this board is full" notices to one socket. */
-const FULL_NOTICE_MS = 10_000;
+/**
+ * The least time between two notices of one kind to one socket. A pen stroke
+ * on a full board is twenty refusals a second, and each notice is a toast
+ * someone has to dismiss.
+ */
+const NOTICE_EVERY_MS = 10_000;
+
+/** Boards whose awareness already has the listener that broadcasts retractions. */
+const broadcasting = new WeakSet<object>();
+
+/** Set by attachGateway, for the REST layer's evictBoard. */
+let server: IOServer | null = null;
 
 /** Per-socket state, established during the handshake. */
 type SocketState = {
@@ -64,7 +75,7 @@ type SocketState = {
   presenceKey: string;
   /** Awareness client ids this socket speaks for, released on disconnect. */
   awarenessClients: Set<number>;
-  buckets: { syncUpdate: Bucket; syncStep: Bucket; awareness: Bucket };
+  buckets: { syncUpdate: Bucket; syncBytes: Bucket; syncStep: Bucket; awareness: Bucket };
 };
 
 const state = new WeakMap<Socket, SocketState>();
@@ -88,6 +99,7 @@ export function attachGateway(httpServer: HttpServer): IOServer {
     // MAX_FRAME_BYTES.
     maxHttpBufferSize: MAX_FRAME_BYTES,
   });
+  server = io;
 
   // Authentication and authorization happen once, here, before any event
   // handler is wired up. The scaffold read the board id from a client-sent
@@ -133,6 +145,7 @@ export function attachGateway(httpServer: HttpServer): IOServer {
         awarenessClients: new Set(),
         buckets: {
           syncUpdate: newBucket(SOCKET_RULES.syncUpdate),
+          syncBytes: newBucket(SOCKET_RULES.syncBytes),
           syncStep: newBucket(SOCKET_RULES.syncStep),
           awareness: newBucket(SOCKET_RULES.awareness),
         },
@@ -172,8 +185,12 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
     return;
   }
 
-  // Between the await above and here the socket may already be gone.
-  if (socket.disconnected) return;
+  // Between the await above and here the socket may already be gone. It never
+  // joined the room, so no disconnect handler will release what it loaded.
+  if (socket.disconnected) {
+    if (socketCount(boardId) === 0) void releaseBoard(boardId);
+    return;
+  }
 
   // acquireDoc succeeded, so the doc is now held open for this socket — from
   // here on, any throw has to still reach a disconnect (and, via `named`, tell
@@ -217,7 +234,18 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
       }, RESYNC_AFTER_MS);
     };
 
-    let toldFull = 0;
+    const told = new Map<string, number>();
+    const notice = (kind: string, message: string, next: string) => {
+      const now = Date.now();
+      if (now - (told.get(kind) ?? -Infinity) < NOTICE_EVERY_MS) return;
+      told.set(kind, now);
+      named(socket, message, next);
+    };
+
+    // Set when the board was too full to take something this socket sent. The
+    // client still has it, and everything it sends afterwards leans on it, so
+    // once anything of its gets in again it is asked for what is missing.
+    let refusedForRoom = false;
 
     socket.on(EVENTS.SYNC_STEP, (payload: unknown) => {
       const vector = toBytes(payload);
@@ -229,20 +257,25 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
     socket.on(EVENTS.SYNC_UPDATE, (payload: unknown) => {
       const update = toBytes(payload);
       if (!update) return;
-      if (!take(own.buckets.syncUpdate, SOCKET_RULES.syncUpdate)) {
+      if (
+        !take(own.buckets.syncUpdate, SOCKET_RULES.syncUpdate) ||
+        !take(own.buckets.syncBytes, SOCKET_RULES.syncBytes, update.byteLength)
+      ) {
         resyncSoon();
         return;
       }
 
-      const result = applyClientUpdate(io, boardId, doc, update, socket);
-      if (result === "too_large") {
-        named(socket, "That change was too large to apply.", "Try again with a smaller selection.");
-      } else if (result === "board_full" && Date.now() - toldFull >= FULL_NOTICE_MS) {
-        // Once in a while, not per update: a pen stroke on a full board is
-        // twenty refusals a second, and each notice is a toast to dismiss.
-        toldFull = Date.now();
-        named(socket, "This board is full.", "Delete something to make room, or start a new board.");
+      const { status, behind } = applyClientUpdate(io, boardId, doc, update, socket);
+      if (status === "too_large") {
+        notice("too_large", "That change was too large to apply.", "Try again with a smaller selection.");
+      } else if (status === "board_full") {
+        refusedForRoom = true;
+        notice("board_full", "This board is full.", "Delete something to make room, or start a new board.");
+      } else if (status === "applied" && refusedForRoom) {
+        refusedForRoom = false;
+        resyncSoon();
       }
+      if (behind) resyncSoon();
     });
 
     // --- awareness (ephemeral, never persisted) ---
@@ -264,22 +297,28 @@ async function joinBoard(io: IOServer, socket: Socket, own: SocketState): Promis
     });
 
     // Retractions the server itself makes (a peer disconnecting) still have to
-    // reach everyone, so they are broadcast from here rather than relayed.
-    const onAwarenessChange = (
-      { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
-      origin: unknown,
-    ) => {
-      if (origin !== SERVER_ORIGIN) return;
-      const changed = [...added, ...updated, ...removed];
-      if (changed.length === 0) return;
-      io.to(roomFor(boardId)).emit(EVENTS.AWARENESS_UPDATE, encodeStates(awareness, changed));
-    };
-    awareness.on("update", onAwarenessChange);
+    // reach everyone, so they are broadcast from here rather than relayed. One
+    // listener per board, not per socket: each would send the same retraction
+    // to the whole room.
+    if (!broadcasting.has(awareness)) {
+      broadcasting.add(awareness);
+      awareness.on(
+        "update",
+        (
+          { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
+          origin: unknown,
+        ) => {
+          if (origin !== SERVER_ORIGIN) return;
+          const changed = [...added, ...updated, ...removed];
+          if (changed.length === 0) return;
+          io.to(roomFor(boardId)).emit(EVENTS.AWARENESS_UPDATE, encodeStates(awareness, changed));
+        },
+      );
+    }
 
     socket.on("disconnect", () => {
       try {
         if (resync) clearTimeout(resync);
-        awareness.off("update", onAwarenessChange);
         // The fix for ghost cursors: the server retracts what this socket
         // brought, whether or not the client managed to say goodbye.
         releaseClients(boardId, own);
@@ -321,6 +360,28 @@ async function releaseBoard(boardId: string): Promise<void> {
   } catch (err) {
     reportError("board-release", err, { boardId, step: "cleanup" });
   }
+}
+
+/**
+ * Close a board that has just been deleted: everyone off it, and nothing of it
+ * left in memory or in the update log.
+ *
+ * Without this the people still on it keep drawing into a doc whose every
+ * snapshot fails, which is never released, and whose log outlives the board —
+ * to be replayed into the next board given the same id.
+ *
+ * The doc goes first, so the disconnects that follow find nothing to save.
+ */
+export async function evictBoard(boardId: string): Promise<void> {
+  try {
+    releaseDoc(boardId);
+    releaseAwareness(boardId);
+    joinCounters.delete(boardId);
+    server?.in(roomFor(boardId)).disconnectSockets(true);
+  } catch (err) {
+    reportError("board-evict", err, { boardId });
+  }
+  await dropLogs([boardId]);
 }
 
 /** STYLE_GUIDE §10.3 — what happened, and the next step. */

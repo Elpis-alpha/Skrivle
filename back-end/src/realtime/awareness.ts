@@ -66,19 +66,28 @@ export function awarenessFor(boardId: string, doc: Y.Doc): Awareness {
   return room.awareness;
 }
 
-type Entry = { clientId: number; clock: number; state: string };
+type Entry = {
+  clientId: number;
+  clock: number;
+  /** The state as the JSON it arrived as. */
+  state: string;
+  /** True when that JSON is null, however it was spelled: the client is leaving. */
+  retraction: boolean;
+};
 
-/** An awareness update's entries, with each state left as the JSON it arrived as. */
+/**
+ * An awareness update's entries. Throws on a state that isn't JSON, which is
+ * before anything has been claimed or applied.
+ */
 function decodeEntries(update: Uint8Array): Entry[] {
   const decoder = decoding.createDecoder(update);
   const count = decoding.readVarUint(decoder);
   const entries: Entry[] = [];
   for (let i = 0; i < count; i++) {
-    entries.push({
-      clientId: decoding.readVarUint(decoder),
-      clock: decoding.readVarUint(decoder),
-      state: decoding.readVarString(decoder),
-    });
+    const clientId = decoding.readVarUint(decoder);
+    const clock = decoding.readVarUint(decoder);
+    const state = decoding.readVarString(decoder);
+    entries.push({ clientId, clock, state, retraction: JSON.parse(state) === null });
   }
   return entries;
 }
@@ -102,7 +111,7 @@ function encodeEntries(entries: Entry[]): Uint8Array {
  * somebody else, and letting it take the id would lock that person's cursor
  * out if they came back.
  */
-function claim(room: Room, socket: AwarenessSocket, { clientId, state }: Entry): boolean {
+function claim(room: Room, socket: AwarenessSocket, { clientId, retraction }: Entry): boolean {
   const owner = room.owners.get(clientId);
   if (owner) {
     if (owner.key !== socket.presenceKey) return false;
@@ -111,7 +120,7 @@ function claim(room: Room, socket: AwarenessSocket, { clientId, state }: Entry):
     return true;
   }
 
-  if (state === "null") return false;
+  if (retraction) return false;
   if (socket.awarenessClients.size >= MAX_CLIENT_IDS_PER_SOCKET) return false;
   room.owners.set(clientId, { key: socket.presenceKey, sockets: new Set([socket.id]) });
   socket.awarenessClients.add(clientId);

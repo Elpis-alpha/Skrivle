@@ -23,7 +23,8 @@
 //   client -> server   sync:step    client's state vector
 //   server -> client   sync:update  everything the client is missing
 //
-// Thereafter every sync:update is relayed to the rest of the room verbatim.
+// Thereafter the change each sync:update makes to the board is relayed to the
+// rest of the room. One that changes nothing — a repeat — is relayed to nobody.
 //
 // Client -> server
 //   sync:step         (stateVector: Uint8Array)  "here is what I have"
@@ -42,7 +43,13 @@
 // Each socket is rate limited (realtime/limits.ts). An awareness update over
 // the limit is dropped. A sync:update over it is dropped too, and about a
 // second later the server sends sync:step again, which the client answers as
-// it does on join — so nothing it drew is lost, only late.
+// it does on join — so nothing it drew is lost, only late. The same follows an
+// update that leaned on one the server never got, and one refused because the
+// board was full once there is room again.
+//
+// The server may close a socket itself (a board that fails to load, or is
+// deleted while open). socket.io-client doesn't retry after that, so the client
+// reconnects on its own; a board that is gone then refuses the handshake.
 
 export const EVENTS = {
   BOARD_JOINED: "board:joined",

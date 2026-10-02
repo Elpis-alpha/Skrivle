@@ -5,7 +5,8 @@ import { prisma } from "../db/prisma.js";
 import { flushTestKeys, useRedis } from "../test/redis-harness.js";
 import { loadDocState } from "./board-store.js";
 import { acquireDoc, dirtyBoardIds, markDirty, resetRegistry } from "./doc-manager.js";
-import { persistSnapshot } from "./snapshot-writer.js";
+import { redis } from "../redis/client.js";
+import { persistSnapshot, stopSnapshotWriter } from "./snapshot-writer.js";
 import { appendUpdate, readUpdates, sealLog, trimLog } from "./update-log.js";
 
 useRedis();
@@ -183,6 +184,51 @@ describe("the update log", () => {
     await deleteBoard(board.id, user.id);
 
     expect(await readUpdates(board.id)).toHaveLength(0);
+  });
+});
+
+// node-redis queues a command while disconnected and waits for as long as that
+// takes. None of this may wait with it: Postgres is where boards are kept.
+describe("with Redis down", () => {
+  const down = () => vi.spyOn(redis, "isReady", "get").mockReturnValue(false);
+
+  it("still saves the board", async () => {
+    const { id, doc } = await liveBoard();
+    down();
+    edit(id, doc, "first");
+
+    await persistSnapshot(id);
+
+    expect(await savedHas(id, "first")).toBe(true);
+  });
+
+  // Serving it without its log would let the next snapshot trim away work the
+  // server had accepted.
+  it("refuses to load a board rather than load it without its log", async () => {
+    const { board } = await createBoard({});
+    down();
+
+    await expect(acquireDoc(board.id)).rejects.toThrow(/update log is unavailable/);
+  });
+});
+
+describe("shutdown", () => {
+  // Closing the sockets starts a write for each board's last one out. Those
+  // have already left the dirty queue, so the flush alone would not wait.
+  it("waits for a snapshot that is already being written", async () => {
+    const { id, doc } = await liveBoard();
+    edit(id, doc, "leaving");
+
+    const real = prisma.$transaction.bind(prisma) as (...args: unknown[]) => Promise<unknown>;
+    vi.spyOn(prisma, "$transaction").mockImplementationOnce((async (...args: unknown[]) => {
+      await new Promise((r) => setTimeout(r, 150));
+      return real(...args);
+    }) as never);
+
+    void persistSnapshot(id);
+    await stopSnapshotWriter();
+
+    expect(await savedHas(id, "leaving")).toBe(true);
   });
 });
 

@@ -16,6 +16,11 @@ export const TTL = {
   otpResendCooldown: 60,
   /** An OAuth round trip that takes longer than this has gone wrong. */
   oauthState: 60 * 10,
+  /**
+   * A board's update log, refreshed by every snapshot. Far longer than a log
+   * ever lives: it only decides when one that nothing trimmed or dropped goes.
+   */
+  updateLog: 60 * 60 * 24 * 30,
 } as const;
 
 export const keys = {
@@ -43,7 +48,7 @@ export const keys = {
   /**
    * A board's update log: every canvas update accepted since its last snapshot,
    * oldest first, with a seal marker for each snapshot in flight. Trimmed as
-   * snapshots land, so it holds about 30 seconds of edits and no key outlives
+   * snapshots land, so it holds about 30 seconds of edits, and dropped with
    * its board. See realtime/update-log.ts.
    */
   updateLog: (boardId: string) => `ulog:${boardId}`,

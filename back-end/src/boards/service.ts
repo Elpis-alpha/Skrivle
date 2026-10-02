@@ -69,6 +69,12 @@ function expiryFrom(hours: number, from = new Date()): Date {
  * an ephemeral one plus a creator token, which is what later lets them extend
  * or claim it without ever having signed in.
  */
+/*
+ * Ids come back: a custom one can be taken again once its board is deleted or
+ * expires. So a new board starts by dropping whatever update log is filed under
+ * its id — otherwise the board that had the id before, if it went without a
+ * final snapshot, would be replayed into this one the first time it is opened.
+ */
 export async function createBoard(input: CreateBoardInput): Promise<CreatedBoard> {
   const signedIn = Boolean(input.userId);
   const creatorToken = signedIn ? null : randomToken();
@@ -92,6 +98,7 @@ export async function createBoard(input: CreateBoardInput): Promise<CreatedBoard
     if (!isValidCustomId(id)) throw new InvalidBoardId(input.customId);
     try {
       const board = await prisma.board.create({ data: { id, ...base } });
+      await dropLogs([id]);
       return { board, creatorToken };
     } catch (err) {
       if (isUniqueViolation(err)) throw new BoardIdTaken(id);
@@ -106,6 +113,7 @@ export async function createBoard(input: CreateBoardInput): Promise<CreatedBoard
     const id = await mintUniqueBoardId(boardExists);
     try {
       const board = await prisma.board.create({ data: { id, ...base } });
+      await dropLogs([id]);
       return { board, creatorToken };
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;

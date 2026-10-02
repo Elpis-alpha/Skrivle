@@ -34,6 +34,12 @@ const per = (rule: BucketRule): BucketRule => ({
 export const SOCKET_RULES = {
   syncUpdate: per({ capacity: 240, perSecond: 60 }),
   /**
+   * The same updates, by weight: bytes, not messages. Drawing is a few
+   * kilobytes a second. The capacity is two boards' worth, so a client catching
+   * up after a long time offline can send everything it has in one go.
+   */
+  syncBytes: per({ capacity: 8 * 1024 * 1024, perSecond: 512 * 1024 }),
+  /**
    * Tight on purpose. A state vector is a few bytes that the server answers
    * with up to the whole board, and a client only sends one per connection.
    */
@@ -45,13 +51,13 @@ export function newBucket(rule: BucketRule, now = Date.now()): Bucket {
   return { tokens: rule.capacity, at: now };
 }
 
-/** Spend one token. False when the socket has none left. */
-export function take(bucket: Bucket, rule: BucketRule, now = Date.now()): boolean {
+/** Spend `cost` tokens. False, and nothing spent, when the socket hasn't that many. */
+export function take(bucket: Bucket, rule: BucketRule, cost = 1, now = Date.now()): boolean {
   const elapsed = Math.max(0, now - bucket.at) / 1000;
   bucket.tokens = Math.min(rule.capacity, bucket.tokens + elapsed * rule.perSecond);
   bucket.at = now;
-  if (bucket.tokens < 1) return false;
-  bucket.tokens -= 1;
+  if (bucket.tokens < cost) return false;
+  bucket.tokens -= cost;
   return true;
 }
 
@@ -66,8 +72,9 @@ export const RESYNC_AFTER_MS = 1000;
  *
  * Every join sends the whole board and every snapshot rewrites it, so an
  * unbounded one is a cost paid by everyone who opens it. Four megabytes is
- * thousands of pen strokes. It also stays under MAX_FRAME_BYTES, so a client
- * that has the whole board and nothing else can still send it in one frame.
+ * thousands of pen strokes. It is also the most one update may be
+ * (MAX_UPDATE_BYTES), so a client holding a whole board the server has lost can
+ * still send it, and it sits under MAX_FRAME_BYTES so that frame gets through.
  */
 export const MAX_BOARD_BYTES = 4 * 1024 * 1024;
 

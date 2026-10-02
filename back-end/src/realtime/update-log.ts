@@ -18,7 +18,7 @@
 // had failed, and would then cut an update the blob doesn't hold.
 import { reportError } from "../errors/report.js";
 import { redis } from "../redis/client.js";
-import { keys } from "../redis/keys.js";
+import { keys, TTL } from "../redis/keys.js";
 
 /** List entries are strings: an update as base64, or a seal's id. */
 const UPDATE = "u:";
@@ -45,18 +45,63 @@ function reportQuietly(context: string, err: unknown, boardId: string): void {
 }
 
 /**
- * Append an accepted update. Not awaited by the caller: the edit is already in
- * the doc and on its way to the room, and neither should wait on Redis.
+ * How long any one of these may take. node-redis doesn't fail a command while
+ * it is disconnected: it queues it and waits, for as long as that takes. Left
+ * alone, a Redis outage would hang every snapshot behind its seal and every
+ * join behind its read — with Postgres, which holds the boards, perfectly well.
  */
-export function appendUpdate(boardId: string, update: Uint8Array): void {
-  redis
-    .rPush(keys.updateLog(boardId), UPDATE + Buffer.from(update).toString("base64"))
-    .catch((err: unknown) => reportQuietly("update-log-append", err, boardId));
+const COMMAND_TIMEOUT_MS = 2000;
+
+class LogUnavailable extends Error {
+  constructor(why: string) {
+    super(`The update log is unavailable: ${why}.`);
+    this.name = "LogUnavailable";
+  }
 }
 
-/** Everything logged for a board since its last snapshot, oldest first. */
+/** Run one Redis command, or fail: at once if Redis isn't connected, soon if it stalls. */
+function bounded<T>(command: () => Promise<T>): Promise<T> {
+  if (!redis.isReady) return Promise.reject(new LogUnavailable("Redis is not connected"));
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new LogUnavailable("Redis did not answer in time")),
+      COMMAND_TIMEOUT_MS,
+    );
+    command().then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+/**
+ * Append an accepted update. Not awaited by the caller: the edit is already in
+ * the doc and on its way to the room, and neither should wait on Redis.
+ *
+ * With Redis down the update isn't logged, and isn't queued to be: it stays
+ * what it was before there was a log, covered by the next snapshot.
+ */
+export function appendUpdate(boardId: string, update: Uint8Array): void {
+  bounded(() =>
+    redis.rPush(keys.updateLog(boardId), UPDATE + Buffer.from(update).toString("base64")),
+  ).catch((err: unknown) => reportQuietly("update-log-append", err, boardId));
+}
+
+/**
+ * Everything logged for a board since its last snapshot, oldest first.
+ *
+ * Throws when the log can't be read. A board must not be served without it:
+ * the next snapshot would trim the unread entries away, and with them work the
+ * server had accepted.
+ */
 export async function readUpdates(boardId: string): Promise<Uint8Array[]> {
-  const entries = await redis.lRange(keys.updateLog(boardId), 0, -1);
+  const entries = await bounded(() => redis.lRange(keys.updateLog(boardId), 0, -1));
   return entries
     .filter((entry) => entry.startsWith(UPDATE))
     .map((entry) => new Uint8Array(Buffer.from(entry.slice(UPDATE.length), "base64")));
@@ -74,17 +119,23 @@ let sealCount = 0;
  *
  * Resolves to the seal to pass to trimLog, or null if it couldn't be written,
  * in which case there is nothing to trim to and the next snapshot's seal covers
- * these entries as well.
+ * these entries as well. Never rejects, and never takes longer than the
+ * command timeout.
  */
 export function sealLog(boardId: string): Promise<string | null> {
+  const key = keys.updateLog(boardId);
   const seal = `${SEAL}${Date.now().toString(36)}-${(sealCount++).toString(36)}`;
-  return redis.rPush(keys.updateLog(boardId), seal).then(
+  const pushed = bounded(() => redis.rPush(key, seal)).then(
     () => seal,
     (err: unknown) => {
       reportQuietly("update-log-seal", err, boardId);
       return null;
     },
   );
+  // A backstop, not the mechanism: a log is trimmed by snapshots and dropped
+  // with its board. This is for the one that somehow escapes both.
+  bounded(() => redis.expire(key, TTL.updateLog)).catch(() => {});
+  return pushed;
 }
 
 /**
@@ -95,17 +146,22 @@ export function sealLog(boardId: string): Promise<string | null> {
 export async function trimLog(boardId: string, seal: string | null): Promise<void> {
   if (!seal) return;
   try {
-    await redis.eval(TRIM_THROUGH, { keys: [keys.updateLog(boardId)], arguments: [seal] });
+    await bounded(() =>
+      redis.eval(TRIM_THROUGH, { keys: [keys.updateLog(boardId)], arguments: [seal] }),
+    );
   } catch (err) {
     reportQuietly("update-log-trim", err, boardId);
   }
 }
 
-/** Forget the logs of boards that no longer exist. Never throws. */
+/**
+ * Forget the logs of boards that no longer exist — or, for an id about to be
+ * used, of the board that had it before. Never throws.
+ */
 export async function dropLogs(boardIds: string[]): Promise<void> {
   if (boardIds.length === 0) return;
   try {
-    await redis.del(boardIds.map((id) => keys.updateLog(id)));
+    await bounded(() => redis.del(boardIds.map((id) => keys.updateLog(id))));
   } catch (err) {
     reportQuietly("update-log-drop", err, boardIds[0]!);
   }

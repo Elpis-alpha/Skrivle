@@ -23,6 +23,7 @@ import {
 import { optionalSession, requireSession } from "../../auth/middleware.js";
 import { ownsPublicId, thumbnailUrl } from "../../media/cloudinary.js";
 import { prisma } from "../../db/prisma.js";
+import { evictBoard } from "../../realtime/gateway.js";
 import { limitByIp, RULES } from "../../redis/rate-limit.js";
 import { validate } from "../middleware/validate.js";
 
@@ -229,6 +230,8 @@ boardsRouter.delete("/:id", validate(idParam, "params"), requireSession, async (
     notOwner(res, "delete");
     return;
   }
+  // Whoever is still on it is drawing on a board that no longer exists.
+  await evictBoard(board.id);
   res.status(204).end();
 });
 

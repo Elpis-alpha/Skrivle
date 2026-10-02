@@ -12,28 +12,28 @@
 // what actually differs, so rejoining a large board is cheap.
 import type { Server as IOServer, Socket } from "socket.io";
 import * as Y from "yjs";
-import { addBytes, hasRoom, markDirty } from "./doc-manager.js";
+import { addBytes, hasRoom, markDirty, peekDoc } from "./doc-manager.js";
+import { MAX_BOARD_BYTES } from "./limits.js";
 import { appendUpdate } from "./update-log.js";
 import { EVENTS } from "../protocol/events.js";
 
 /**
- * Reject anything larger than this in a single update.
+ * Reject anything larger than this in a single update: a whole board.
  *
- * Socket.IO's own maxHttpBufferSize is the outer guard; this one exists so an
- * oversized frame is refused with a named error the client can act on, rather
- * than the connection being torn down with no explanation.
+ * The one update a client legitimately sends at size is its catch-up — its
+ * answer to the server's state vector, which is everything it drew while
+ * disconnected, or the whole board if the server has lost it. A ceiling below a
+ * board's would refuse that on every reconnect, for ever, and a refused update
+ * holds back everything the client sends after it.
  */
-export const MAX_UPDATE_BYTES = 1024 * 1024;
+export const MAX_UPDATE_BYTES = MAX_BOARD_BYTES;
 
 /**
  * The transport ceiling, deliberately well above MAX_UPDATE_BYTES.
  *
- * They used to be equal, which quietly made the named error above unreachable:
- * anything big enough to trip it was already killed by the buffer limit, with
- * no message at all. Worse, the one update a client legitimately sends at size
- * is the reconnect catch-up — encodeStateAsUpdate of everything drawn during an
- * outage. At an equal ceiling, a client that drew more than a megabyte offline
- * has every reconnect attempt dropped, forever, silently.
+ * At an equal ceiling the named error for an oversized update is unreachable:
+ * anything big enough to trip it has its connection torn down by Socket.IO's
+ * buffer limit first, with no message at all.
  */
 export const MAX_FRAME_BYTES = 8 * 1024 * 1024;
 
@@ -57,16 +57,34 @@ export function sendMissingUpdates(socket: Socket, doc: Y.Doc, stateVector: Uint
   socket.emit(EVENTS.SYNC_UPDATE, diff);
 }
 
-/** Why an update was turned away, or that it wasn't. */
-export type ApplyResult = "applied" | "too_large" | "board_full" | "invalid";
+export type ApplyResult = {
+  /** Why the update was turned away, or that it wasn't. */
+  status: "applied" | "too_large" | "board_full" | "invalid";
+  /**
+   * True when the update leaned on something the server doesn't have — an
+   * earlier update of this client's that was dropped or refused. The sender
+   * needs asking for what is missing.
+   */
+  behind: boolean;
+};
+
+const refused = (status: ApplyResult["status"]): ApplyResult => ({ status, behind: false });
 
 /**
- * Apply a client's update and fan it out to the rest of the board.
+ * Apply a client's update and fan out what it changed.
  *
- * The client's bytes are relayed verbatim rather than re-encoded from the
- * server's doc. Yjs updates are commutative and idempotent, so every peer
- * converges on the same document either way, and forwarding avoids re-encoding
- * the delta once per recipient.
+ * What is relayed and logged is the change the doc reports, not the bytes that
+ * arrived. They are the same for an honest update, and re-encoding costs one
+ * pass per update rather than one per recipient. The difference is everything
+ * else: an update the server already has changes nothing and so goes nowhere,
+ * and one that is only partly usable passes on only the part that was.
+ *
+ * Nothing is left pending. Yjs keeps what it can't integrate yet — structs
+ * whose predecessors are missing, deletions of items it hasn't seen — and
+ * would hold it for ever if the missing piece never came, in memory and in
+ * every snapshot. Here the missing piece is always the sender's to supply, so
+ * the leftovers are discarded and the caller asks the sender to resync, which
+ * brings all of it back in one update.
  *
  * A full board still takes an update that only deletes. Refusing those would
  * leave nobody able to make room.
@@ -78,23 +96,53 @@ export function applyClientUpdate(
   update: Uint8Array,
   from: Socket,
 ): ApplyResult {
-  if (update.byteLength > MAX_UPDATE_BYTES) return "too_large";
+  // The board was deleted with this socket still on it.
+  if (peekDoc(boardId) !== doc) return refused("invalid");
+  if (update.byteLength > MAX_UPDATE_BYTES) return refused("too_large");
 
+  let adds: boolean;
   try {
-    if (!hasRoom(boardId, update.byteLength) && addsContent(update)) return "board_full";
+    // Decoding reads the whole update, so this is also what turns away bytes
+    // that would throw halfway through being applied.
+    adds = addsContent(update);
+  } catch {
+    return refused("invalid");
+  }
+  if (adds && !hasRoom(boardId, update.byteLength)) {
+    // Measured against what the server lacks, not what arrived. A catch-up
+    // repeats a great deal the board already holds, and that takes no room.
+    const fresh = Y.diffUpdate(update, Y.encodeStateVector(doc));
+    if (!hasRoom(boardId, fresh.byteLength)) return refused("board_full");
+  }
 
+  const changes: Uint8Array[] = [];
+  const capture = (change: Uint8Array) => changes.push(change);
+  let status: ApplyResult["status"] = "applied";
+  doc.on("update", capture);
+  try {
     // The origin tags this change as coming from `from`, which keeps the
     // server's own update handlers from treating it as a local edit.
     Y.applyUpdate(doc, update, from.id);
   } catch {
-    return "invalid";
+    // Whatever it integrated before throwing is in the doc now, and was
+    // captured, so it is still saved and relayed below.
+    status = "invalid";
+  } finally {
+    doc.off("update", capture);
   }
 
-  addBytes(boardId, update.byteLength);
-  markDirty(boardId);
-  appendUpdate(boardId, update);
-  io.to(roomFor(boardId)).except(from.id).emit(EVENTS.SYNC_UPDATE, update);
-  return "applied";
+  const behind = doc.store.pendingStructs !== null || doc.store.pendingDs !== null;
+  doc.store.pendingStructs = null;
+  doc.store.pendingDs = null;
+
+  if (changes.length > 0) {
+    const change = changes.length === 1 ? changes[0]! : Y.mergeUpdates(changes);
+    addBytes(boardId, change.byteLength);
+    markDirty(boardId);
+    appendUpdate(boardId, change);
+    io.to(roomFor(boardId)).except(from.id).emit(EVENTS.SYNC_UPDATE, change);
+  }
+  return { status, behind };
 }
 
 /** Whether an update carries anything besides deletions. Throws on malformed bytes. */

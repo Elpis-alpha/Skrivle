@@ -42,6 +42,11 @@ export async function stopSnapshotWriter(): Promise<void> {
     clearInterval(timer);
     timer = null;
   }
+  // The sockets have just been closed, and each board's last one out started a
+  // write of its own. Those cleared the dirty flag as they encoded, so
+  // flushDirty would pass them by — and the connections they need are about
+  // to be torn down.
+  await Promise.allSettled([...writing.values()]);
   await flushDirty();
 }
 

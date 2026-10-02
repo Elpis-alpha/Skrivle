@@ -138,7 +138,8 @@ board is chosen in the Socket.IO **handshake**, not by an event.
   4 MB ceiling on a board's encoded size, and awareness a socket may send only
   for its own client id. An update dropped for arriving too fast is asked for
   again a second later, so a limit delays work rather than losing it. A full
-  board still takes deletions.
+  board still takes deletions. Only the change an update makes to the doc is
+  relayed and logged, and nothing the doc can't integrate is kept.
 - **A crash loses nothing that was accepted.** Snapshots are written every 30
   seconds, so between them every accepted update is also appended to a Redis
   list (`src/realtime/update-log.ts`). A board loads as its snapshot plus its

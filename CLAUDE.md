@@ -122,11 +122,13 @@ Three about hardening:
 
 - **A dropped canvas update has to be asked for again.** Yjs holds back
   everything a client sends after a missing update, so the gateway follows a
-  rate-limit drop by re-sending its state vector. Don't add a path that drops a
-  `sync:update` silently.
+  rate-limit drop by re-sending its state vector, and the bridge discards what
+  the doc can't integrate (`pendingStructs`, `pendingDs`) and asks likewise.
+  Don't add a path that drops a `sync:update` silently.
 - **The update log is trimmed by a seal, never by count,** and the seal is
   pushed in the same tick the doc is encoded with nothing awaited between.
-  That ordering is the whole guarantee.
+  That ordering is the whole guarantee. Every log command goes through
+  `bounded()`, because node-redis queues rather than fails while disconnected.
 - **The client doesn't emit while the socket is down.** Socket.IO would queue
   every edit and flush them into the rate limit on reconnect; the reconnect's
   sync sends the same work as one update. The local copy is keyed by board id

@@ -13,7 +13,10 @@ const { prisma } = await import("../db/prisma.js");
 const { flushTestKeys, useRedis } = await import("../test/redis-harness.js");
 const { EVENTS, HANDSHAKE_ERRORS } = await import("../protocol/events.js");
 const { createBoard } = await import("../boards/service.js");
-const { resetRegistry } = await import("./doc-manager.js");
+const { peekDoc, resetRegistry } = await import("./doc-manager.js");
+const { evictBoard } = await import("./gateway.js");
+const { appendUpdate, readUpdates } = await import("./update-log.js");
+const encoding = await import("lib0/encoding");
 const { resetAwarenessRegistry } = await import("./awareness.js");
 const { MAX_BOARD_BYTES, MAX_CLIENT_IDS_PER_SOCKET, SOCKET_RULES } = await import("./limits.js");
 
@@ -405,6 +408,44 @@ describe("awareness", () => {
     expect((await presentOn(boardId)).get(clientId)).toEqual({ cursor: { x: 1, y: 2 } });
   });
 
+  // y-protocols reads a state with JSON.parse, so " null" retracts as surely
+  // as "null" does. It must be recognised the same way.
+  it("is not fooled by a retraction spelled another way", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+    const b = await connect(boardId);
+    const { clientId } = awarenessUpdate({});
+
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, 1);
+    encoding.writeVarUint(encoder, clientId);
+    encoding.writeVarUint(encoder, 1);
+    encoding.writeVarString(encoder, " null ");
+    b.emit(EVENTS.AWARENESS_UPDATE, encoding.toUint8Array(encoder));
+    await settle();
+    a.emit(EVENTS.AWARENESS_UPDATE, forged(clientId, { cursor: { x: 1, y: 2 } }));
+    await settle();
+
+    expect((await presentOn(boardId)).get(clientId)).toEqual({ cursor: { x: 1, y: 2 } });
+  });
+
+  it("tells the room once, not once per socket, when someone leaves", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+    const b = await connect(boardId);
+    await connect(boardId);
+
+    a.emit(EVENTS.AWARENESS_UPDATE, awarenessUpdate({ cursor: { x: 1, y: 2 } }).bytes);
+    await settle();
+
+    let heard = 0;
+    b.on(EVENTS.AWARENESS_UPDATE, () => heard++);
+    a.disconnect();
+    await settle();
+
+    expect(heard).toBe(1);
+  });
+
   it("stops one socket introducing a crowd", async () => {
     const boardId = await makeBoard();
     const a = await connect(boardId);
@@ -499,8 +540,11 @@ describe("limits", () => {
 
     const doc = new Y.Doc();
     doc.on("update", (update: Uint8Array) => a.emit(EVENTS.SYNC_UPDATE, update));
+    a.on(EVENTS.SYNC_STEP, (vector: ArrayBuffer) => {
+      a.emit(EVENTS.SYNC_UPDATE, Y.encodeStateAsUpdate(doc, new Uint8Array(vector)));
+    });
 
-    // Each just under the per-update ceiling; together, past the board's.
+    // Each a good part of a megabyte; together, past the board's ceiling.
     const chunk = "x".repeat(900_000);
     const chunks = Math.ceil(MAX_BOARD_BYTES / chunk.length);
     for (let i = 0; i < chunks; i++) doc.getMap("notes").set(`n${i}`, chunk);
@@ -518,5 +562,127 @@ describe("limits", () => {
     const c = await connect(boardId);
     expect((await boardAsSeenBy(c)).getMap("notes").has("n0")).toBe(false);
     expect(errors).toHaveLength(1);
+
+    // The refused note is still on its author's screen, and everything they
+    // draw next leans on it. Now there is room, the server asks for it.
+    const last = `n${chunks - 1}`;
+    await expect
+      .poll(async () => (await boardAsSeenBy(await connect(boardId))).getMap("notes").has(last), {
+        timeout: 5000,
+        interval: 500,
+      })
+      .toBe(true);
+  });
+
+  // Yjs would keep such an update, waiting for the piece it leans on — in
+  // memory and in every snapshot, for ever if that piece never came.
+  it("keeps nothing it cannot use, and asks the sender for what is missing", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+
+    const doc = new Y.Doc();
+    const updates: Uint8Array[] = [];
+    doc.on("update", (update: Uint8Array) => updates.push(update));
+    doc.getMap("notes").set("first", 1);
+    doc.getMap("notes").set("second", 2);
+
+    const asked = once<ArrayBuffer>(a, EVENTS.SYNC_STEP, 4000);
+    a.emit(EVENTS.SYNC_UPDATE, updates[1]);
+    await new Promise((r) => setTimeout(r, 200));
+
+    const held = peekDoc(boardId)!;
+    expect(held.store.pendingStructs).toBeNull();
+    expect(held.getMap("notes").size).toBe(0);
+
+    a.emit(EVENTS.SYNC_UPDATE, Y.encodeStateAsUpdate(doc, new Uint8Array(await asked)));
+    await new Promise((r) => setTimeout(r, 200));
+    expect(held.getMap("notes").size).toBe(2);
+  });
+
+  it("keeps no deletions of things it has never seen", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+
+    const doc = new Y.Doc();
+    doc.getMap("notes").set("gone", 1);
+    const before = Y.encodeStateVector(doc);
+    doc.getMap("notes").delete("gone");
+
+    // Only the deletion: of an item the server was never sent.
+    a.emit(EVENTS.SYNC_UPDATE, Y.encodeStateAsUpdate(doc, before));
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(peekDoc(boardId)!.store.pendingDs).toBeNull();
+  });
+
+  it("passes on and logs only what changed the board", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+    const b = await connect(boardId);
+
+    let heard = 0;
+    b.on(EVENTS.SYNC_UPDATE, () => heard++);
+
+    const doc = new Y.Doc();
+    doc.getMap("notes").set("once", 1);
+    const update = Y.encodeStateAsUpdate(doc);
+    for (let i = 0; i < 5; i++) a.emit(EVENTS.SYNC_UPDATE, update);
+    await new Promise((r) => setTimeout(r, 300));
+
+    expect(heard).toBe(1);
+    expect(await readUpdates(boardId)).toHaveLength(1);
+  });
+
+  it("saves and passes on nothing from bytes that are not an update", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+    const b = await connect(boardId);
+
+    let heard = 0;
+    b.on(EVENTS.SYNC_UPDATE, () => heard++);
+
+    const doc = new Y.Doc();
+    doc.getMap("notes").set("k", "v");
+    const whole = Y.encodeStateAsUpdate(doc);
+    // Its structs intact, its delete set cut short.
+    a.emit(EVENTS.SYNC_UPDATE, whole.slice(0, whole.byteLength - 1));
+    await new Promise((r) => setTimeout(r, 300));
+
+    expect(heard).toBe(0);
+    expect(peekDoc(boardId)!.getMap("notes").size).toBe(0);
+  });
+});
+
+describe("a deleted board", () => {
+  it("puts everyone off it and leaves nothing behind", async () => {
+    const boardId = await makeBoard();
+    const a = await connect(boardId);
+
+    const doc = new Y.Doc();
+    doc.getMap("notes").set("k", "v");
+    a.emit(EVENTS.SYNC_UPDATE, Y.encodeStateAsUpdate(doc));
+    await new Promise((r) => setTimeout(r, 200));
+    expect(await readUpdates(boardId)).toHaveLength(1);
+
+    const dropped = once<string>(a, "disconnect");
+    await prisma.board.delete({ where: { id: boardId } });
+    await evictBoard(boardId);
+
+    expect(await dropped).toBe("io server disconnect");
+    expect(peekDoc(boardId)).toBeNull();
+    expect(await readUpdates(boardId)).toHaveLength(0);
+  });
+
+  // Ids are reused. The board that had this one before must not be replayed
+  // into the one that has it now.
+  it("does not leave a log for the next board with its id to inherit", async () => {
+    const stale = new Y.Doc();
+    stale.getMap("notes").set("old", "board");
+    appendUpdate("standup", Y.encodeStateAsUpdate(stale));
+    await new Promise((r) => setTimeout(r, 100));
+
+    const { board } = await createBoard({ customId: "standup" });
+
+    expect(await readUpdates(board.id)).toHaveLength(0);
   });
 });

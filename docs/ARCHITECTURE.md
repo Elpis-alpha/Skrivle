@@ -39,7 +39,11 @@ token bucket sized at two to three times what the client sends. A cursor update
 over the limit is dropped. A canvas update over it is dropped too, and a second
 later the server sends its state vector again, which the client answers with
 everything the server lacks: the limit delays work, it doesn't lose it. A board's
-encoded size is capped at 4 MB, and a full board still accepts deletions. And a
+encoded size is capped at 4 MB, and a full board still accepts deletions.
+What the server relays and logs is the change an update made to the doc, not
+the bytes that arrived, so a repeat goes nowhere; and it keeps nothing it can't
+integrate, asking the sender to resync instead, so a crafted update can't park
+data in memory and in every snapshot. And a
 socket may send awareness only for its own client id, which it holds through a
 `presenceKey` sent in the handshake, so the socket it reconnects on can carry on
 as the same cursor while no one else can move or retract it.
@@ -79,7 +83,10 @@ seconds. Writing a snapshot appends a seal to the log in the same tick the doc
 is encoded, and trims the log just past that seal once the blob has landed: an
 edit that arrives during the write sits after the seal and survives the trim.
 Snapshot writes for one board never overlap, since an older blob landing after
-a newer one had trimmed the log would lose the difference. The log is in Redis
+a newer one had trimmed the log would lose the difference. Every log command is
+bounded: with Redis down, snapshots still land and updates simply go unlogged,
+while a board not yet in memory refuses to load rather than load without its
+log. The log is in Redis
 because it is the high-churn data the schema keeps out of Postgres. Redis runs
 with its append-only file on, which survives the API crashing or redeploying; a
 power cut on the host can lose the last second.
