@@ -28,6 +28,6 @@ COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/openapi.yaml ./openapi.yaml
 # Applies pending migrations before the server starts — see the script.
 COPY docker-entrypoint.sh ./
-EXPOSE 4000
+EXPOSE 5000
 ENTRYPOINT ["sh", "./docker-entrypoint.sh"]
 CMD ["node", "dist/index.js"]

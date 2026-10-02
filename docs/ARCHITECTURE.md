@@ -158,7 +158,7 @@ Hosted under `elpis.cc`, split by tier:
 - Back-end Compose stack: `back-end` + `redis` (Postgres is external). The API
   publishes no host port: it joins the external `overseer-edge` Docker network,
   shared with the VPS's other containers, and the reverse proxy reaches it as
-  `skrivle-api:4000` there. Redis stays on the stack's default network. A
+  `skrivle-api:5000` there. Redis stays on the stack's default network. A
   profile-gated `migrate` service shares the image for ad-hoc migration runs.
 - **Migrations apply on container start.** `back-end/docker-entrypoint.sh` runs
   `prisma migrate deploy` before the server process; repeated failure crash-loops
