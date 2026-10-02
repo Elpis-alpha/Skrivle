@@ -62,6 +62,9 @@ import { useBoardDoc } from "@/lib/realtime/useBoardDoc";
 import { useUndo } from "@/lib/realtime/useUndo";
 import { useSession } from "@/lib/session/SessionProvider";
 
+/** How long before the same error from the server is worth a second toast. */
+const REPEAT_ERROR_MS = 60_000;
+
 /** How far a duplicate, or a paste with nowhere better to go, sits from what it copied. */
 const COPY_NUDGE = 16;
 
@@ -134,9 +137,19 @@ export function BoardSurface({
 
   // §10.21 — what the server turned away, and the next step: a change too
   // large to apply, or a board that is full.
+  //
+  // An error toast stays until it is dismissed, and a refusal can repeat — on
+  // every reconnect, say — so the same one isn't stacked behind itself.
   const toast = useToast();
+  const lastToast = useRef<{ text: string; at: number } | null>(null);
   useEffect(() => {
-    if (lastError) toast.show(`${lastError.message} ${lastError.next}`, { tone: "error" });
+    if (!lastError) return;
+    const text = `${lastError.message} ${lastError.next}`;
+    const now = Date.now();
+    const last = lastToast.current;
+    if (last && last.text === text && now - last.at < REPEAT_ERROR_MS) return;
+    lastToast.current = { text, at: now };
+    toast.show(text, { tone: "error" });
   }, [lastError, toast]);
 
   const { undo, redo, stopCapturing } = useUndo(doc);

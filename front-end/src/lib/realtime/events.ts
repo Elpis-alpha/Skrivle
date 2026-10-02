@@ -56,5 +56,8 @@ export type BoardJoined = {
 
 export type NamedError = { message: string; next: string };
 
-/** The server's 1 MiB cap, also Socket.IO's maxHttpBufferSize. */
-export const MAX_UPDATE_BYTES = 1024 * 1024;
+/**
+ * The most the server takes in one update: a whole board (its MAX_BOARD_BYTES).
+ * Socket.IO's maxHttpBufferSize is twice that.
+ */
+export const MAX_UPDATE_BYTES = 4 * 1024 * 1024;

@@ -21,8 +21,9 @@ const INDEX_KEY = "skrivle-local-copies";
 const PROBE_DB = "skrivle-probe";
 
 /**
- * A copy nobody has opened in this long is deleted. Guest boards are gone in
- * three days at most, and nothing else would ever clear their copies away.
+ * A copy nobody has opened in this long is deleted, unless it holds work the
+ * server may never have received. Guest boards are gone in three days at most,
+ * and nothing else would ever clear their copies away.
  */
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -32,6 +33,11 @@ export type LocalCopy = {
    * being kept, false if this browser can't keep one. Never rejects.
    */
   loaded: Promise<boolean>;
+  /**
+   * Record whether the copy holds work the server may not have. One that does
+   * is the only place that work exists, so it is never deleted for its age.
+   */
+  setUnsynced: (unsynced: boolean) => void;
   destroy: () => void;
 };
 
@@ -51,15 +57,19 @@ function belongsTo(name: string, boardId: string): boolean {
 // Guarded like every other localStorage read in the product: it throws in
 // Safari's private mode, and the value can always be corrupt.
 
-type Index = Record<string, number>;
+type Entry = { at: number; unsynced: boolean };
+type Index = Record<string, Entry>;
 
 function readIndex(): Index {
   try {
     const parsed: unknown = JSON.parse(window.localStorage.getItem(INDEX_KEY) ?? "{}");
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     const index: Index = {};
-    for (const [name, at] of Object.entries(parsed)) {
-      if (typeof at === "number") index[name] = at;
+    for (const [name, raw] of Object.entries(parsed)) {
+      const entry = raw as Partial<Entry> | null;
+      if (entry && typeof entry.at === "number") {
+        index[name] = { at: entry.at, unsynced: entry.unsynced === true };
+      }
     }
     return index;
   } catch {
@@ -84,11 +94,11 @@ function deleteDatabase(name: string): void {
 }
 
 /** Drop every indexed copy that `stale` picks, and take it off the index. */
-function sweep(stale: (name: string, lastOpened: number) => boolean): void {
+function sweep(stale: (name: string, entry: Entry) => boolean): void {
   const index = readIndex();
   let changed = false;
-  for (const [name, lastOpened] of Object.entries(index)) {
-    if (!stale(name, lastOpened)) continue;
+  for (const [name, entry] of Object.entries(index)) {
+    if (!stale(name, entry)) continue;
     deleteDatabase(name);
     delete index[name];
     changed = true;
@@ -142,18 +152,23 @@ export function openLocalCopy(boardId: string, createdAt: string, doc: Y.Doc): L
   const name = nameFor(boardId, createdAt);
   let provider: IndexeddbPersistence | null = null;
   let destroyed = false;
+  let indexed = false;
 
   const loaded = canOpen()
     .then(async (usable) => {
       if (!usable || destroyed) return false;
 
       const now = Date.now();
-      // An older incarnation of this id, and anything long unopened.
+      // An older incarnation of this id, whose board is gone, and anything
+      // long unopened that the server already has.
       sweep(
-        (other, lastOpened) =>
-          other !== name && (belongsTo(other, boardId) || now - lastOpened > MAX_AGE_MS),
+        (other, entry) =>
+          other !== name &&
+          (belongsTo(other, boardId) || (!entry.unsynced && now - entry.at > MAX_AGE_MS)),
       );
-      writeIndex({ ...readIndex(), [name]: now });
+      const index = readIndex();
+      writeIndex({ ...index, [name]: { at: now, unsynced: index[name]?.unsynced === true } });
+      indexed = true;
 
       provider = new IndexeddbPersistence(name, doc);
       await provider.whenSynced;
@@ -163,6 +178,13 @@ export function openLocalCopy(boardId: string, createdAt: string, doc: Y.Doc): L
 
   return {
     loaded,
+    setUnsynced(unsynced) {
+      if (!indexed || destroyed) return;
+      const index = readIndex();
+      const entry = index[name];
+      if (!entry || entry.unsynced === unsynced) return;
+      writeIndex({ ...index, [name]: { ...entry, unsynced } });
+    },
     destroy() {
       destroyed = true;
       void provider?.destroy().catch(() => {});

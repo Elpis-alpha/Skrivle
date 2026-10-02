@@ -96,6 +96,14 @@ export const PUBLISH_MS = 50;
 /** Movements smaller than this aren't worth a frame on the wire. */
 const CURSOR_EPSILON = 0.5;
 
+/**
+ * How long to wait before going back after the server closes the socket, and
+ * the most that wait grows to. Socket.IO retries a dropped connection on its
+ * own, but not one the server closed on purpose.
+ */
+const REJOIN_MS = 2000;
+const REJOIN_MAX_MS = 30_000;
+
 /** A handshake that wedges must not leave a permanently blank canvas. */
 const HYDRATE_FALLBACK_MS = 3000;
 
@@ -238,6 +246,9 @@ export function createBoardSession(
 
   const socket = connect(boardId, name, newPresenceKey());
 
+  // Opened further down, once the listeners that send its contents are on.
+  let localCopy: LocalCopy | null = null;
+
   // --- local -> wire --------------------------------------------------------
 
   const onDocUpdate = (update: Uint8Array, origin: unknown) => {
@@ -246,7 +257,10 @@ export function createBoardSession(
     // Socket.IO would queue this and send it on reconnect: one frame per edit
     // made offline, all at once, straight into the server's rate limit. The
     // reconnect's own sync sends the same work as a single update.
-    if (!socket.connected) return;
+    if (!socket.connected) {
+      localCopy?.setUnsynced(true);
+      return;
+    }
     socket.emit(EVENTS.SYNC_UPDATE, update);
   };
   doc.on("update", onDocUpdate);
@@ -313,6 +327,8 @@ export function createBoardSession(
       avatarUrl,
     } satisfies PresenceState);
 
+    rejoinDelay = REJOIN_MS;
+
     // Our half of the two-step: tell the server what we already have.
     socket.emit(EVENTS.SYNC_STEP, Y.encodeStateVector(doc));
 
@@ -325,6 +341,8 @@ export function createBoardSession(
     const vector = toBytes(payload);
     if (!vector) return;
     socket.emit(EVENTS.SYNC_UPDATE, Y.encodeStateAsUpdate(doc, vector));
+    // Everything this browser has that the server lacked is on its way.
+    localCopy?.setUnsynced(false);
   });
 
   socket.on(EVENTS.SYNC_UPDATE, (payload: unknown) => {
@@ -353,10 +371,25 @@ export function createBoardSession(
     emit({ status: "refused", refusal: refusalFor(err.message) });
   });
 
+  // The server closes a socket itself when a board fails to load or to join,
+  // and Socket.IO takes that as final: it retries a dropped connection, never
+  // one the server ended. Left there, the bar would say "Reconnecting…" for
+  // ever to a client that had stopped trying. So go back, a little later each
+  // time. A board that has really gone refuses the handshake instead, which
+  // ends in "refused" above.
+  let rejoinTimer: ReturnType<typeof setTimeout> | null = null;
+  let rejoinDelay = REJOIN_MS;
+
   socket.on("disconnect", (reason: string) => {
     emit({
       status: reason === "io client disconnect" ? "closed" : "reconnecting",
     });
+    if (reason !== "io server disconnect" || rejoinTimer) return;
+    rejoinTimer = setTimeout(() => {
+      rejoinTimer = null;
+      if (!destroyed) socket.connect();
+    }, rejoinDelay);
+    rejoinDelay = Math.min(rejoinDelay * 2, REJOIN_MAX_MS);
   });
 
   socket.connect();
@@ -366,7 +399,7 @@ export function createBoardSession(
   // After the listeners above, so what the copy holds and the server doesn't
   // goes out as a local change: through the sync if the socket isn't up yet,
   // straight to it if it is.
-  const localCopy = persist(doc);
+  localCopy = persist(doc);
   void localCopy?.loaded.then((kept) => {
     if (destroyed || !kept) return;
     emit({ savedLocally: true });
@@ -455,6 +488,7 @@ export function createBoardSession(
 
     if (flushTimer) clearTimeout(flushTimer);
     if (hydrateTimer) clearTimeout(hydrateTimer);
+    if (rejoinTimer) clearTimeout(rejoinTimer);
 
     // Retract our own cursor before the socket goes: peers lose it a round trip
     // early. The server's own retraction still covers a crash or a lost tab.

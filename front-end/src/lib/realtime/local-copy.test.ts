@@ -98,6 +98,46 @@ describe("openLocalCopy", () => {
     expect(again.getMap("elements").size).toBe(0);
   });
 
+  // It may be the only place that work exists.
+  it("keeps a copy that holds unsynced work, however long it has sat", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    const doc = new Y.Doc();
+    const copy = openLocalCopy("oldie", CREATED, doc)!;
+    open.push(copy);
+    await copy.loaded;
+    doc.getMap("elements").set("note", "drawn offline");
+    copy.setUnsynced(true);
+    await closeAll();
+
+    vi.setSystemTime(new Date("2026-06-01T00:00:00Z"));
+    await kept("k3m9p");
+    await closeAll();
+
+    const again = await kept("oldie");
+    expect(again.getMap("elements").get("note")).toBe("drawn offline");
+  });
+
+  it("lets a copy go for its age again once it has synced", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    const doc = new Y.Doc();
+    const copy = openLocalCopy("oldie", CREATED, doc)!;
+    open.push(copy);
+    await copy.loaded;
+    doc.getMap("elements").set("note", "sent");
+    copy.setUnsynced(true);
+    copy.setUnsynced(false);
+    await closeAll();
+
+    vi.setSystemTime(new Date("2026-06-01T00:00:00Z"));
+    await kept("k3m9p");
+    await closeAll();
+
+    const again = await kept("oldie");
+    expect(again.getMap("elements").size).toBe(0);
+  });
+
   it("keeps a copy that was opened recently", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));

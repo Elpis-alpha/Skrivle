@@ -458,6 +458,56 @@ describe("while the socket is down", () => {
   });
 });
 
+describe("when the server closes the socket", () => {
+  // Socket.IO retries a connection that dropped, never one the server ended.
+  // Without this the bar says "Reconnecting…" to a client that has given up.
+  it("goes back, a little later each time, until it is let in", () => {
+    vi.useFakeTimers();
+    start();
+    const connects = vi.spyOn(socket, "connect");
+
+    socket.receive("disconnect", "io server disconnect");
+    expect(session.getSnapshot().status).toBe("reconnecting");
+    vi.advanceTimersByTime(2000);
+    expect(connects).toHaveBeenCalledTimes(1);
+
+    socket.receive("disconnect", "io server disconnect");
+    vi.advanceTimersByTime(2000);
+    expect(connects).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(2000);
+    expect(connects).toHaveBeenCalledTimes(2);
+
+    // Joined: the next time starts from the short wait again.
+    socket.receive(EVENTS.BOARD_JOINED, JOINED);
+    socket.receive("disconnect", "io server disconnect");
+    vi.advanceTimersByTime(2000);
+    expect(connects).toHaveBeenCalledTimes(3);
+  });
+
+  it("leaves a dropped connection to Socket.IO, which retries those itself", () => {
+    vi.useFakeTimers();
+    start();
+    const connects = vi.spyOn(socket, "connect");
+
+    socket.receive("disconnect", "transport close");
+    vi.advanceTimersByTime(60_000);
+
+    expect(connects).not.toHaveBeenCalled();
+  });
+
+  it("does not go back once the session is over", () => {
+    vi.useFakeTimers();
+    start();
+    const connects = vi.spyOn(socket, "connect");
+
+    socket.receive("disconnect", "io server disconnect");
+    session.destroy();
+    vi.advanceTimersByTime(60_000);
+
+    expect(connects).not.toHaveBeenCalled();
+  });
+});
+
 describe("this browser's copy", () => {
   /** Stands in for IndexedDB: loads `stored` into the doc when told to. */
   function fakeCopy(doc: Y.Doc, stored: Y.Doc | null) {
@@ -465,6 +515,7 @@ describe("this browser's copy", () => {
     const loaded = new Promise<boolean>((resolve) => (finish = resolve));
     return {
       loaded,
+      setUnsynced: vi.fn(),
       destroy: vi.fn(),
       load() {
         if (stored) Y.applyUpdate(doc, Y.encodeStateAsUpdate(stored), "local-copy");
@@ -558,6 +609,19 @@ describe("this browser's copy", () => {
     socket.receive(EVENTS.SYNC_STEP, Y.encodeStateVector(server));
     Y.applyUpdate(server, socket.lastOf(EVENTS.SYNC_UPDATE) as Uint8Array);
     expect(server.getMap("elements").has("note-1")).toBe(true);
+  });
+
+  // The index uses this to never delete, for its age, a copy that holds the
+  // only record of something.
+  it("is marked unsynced by an edit made offline, and synced by the next sync", () => {
+    const copy = startWith(null);
+    socket.connected = false;
+    elementsOf(session.doc).set("offline", 1);
+    expect(copy.setUnsynced).toHaveBeenLastCalledWith(true);
+
+    socket.connected = true;
+    socket.receive(EVENTS.SYNC_STEP, Y.encodeStateVector(new Y.Doc()));
+    expect(copy.setUnsynced).toHaveBeenLastCalledWith(false);
   });
 
   it("is closed with the session", () => {
